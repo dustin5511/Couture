@@ -1,0 +1,15 @@
+## .NET build artifacts
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+## Strong-name keys should stay local
+*.snk
+
+## JetBrains
+.idea/
+
+## VS Code
+.vscode/
