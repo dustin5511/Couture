@@ -20,14 +20,6 @@ namespace Couture.Plugins.MultipleQuotes
     {
         protected override void ExecuteInternal(PluginContext ctx)
         {
-            // Short-circuit when our own code caused the update – prevents
-            // a ping-pong between the rollup write and the quote update.
-            if (ctx.Execution.SharedVariables.Contains(SchemaConstants.SharedVariableKeys.SuppressCascade)
-                && Convert.ToBoolean(ctx.Execution.SharedVariables[SchemaConstants.SharedVariableKeys.SuppressCascade]))
-            {
-                return;
-            }
-
             if (ctx.Execution.Depth > 3)
             {
                 ctx.Tracing.Trace("Depth {0} exceeded – bailing out of rollup refresh.", ctx.Execution.Depth);

@@ -89,10 +89,6 @@ namespace Couture.Plugins.MultipleQuotes.Constants
             /// Id of the opportunity whose state needs restoring in
             /// post-operation once the platform has force-closed it.
             public const string OpportunityToReopen = "Couture.OpportunityToReopen";
-
-            /// Flag set by our own code so nested plugin invocations don't
-            /// recursively close/reopen records.
-            public const string SuppressCascade = "Couture.SuppressCascade";
         }
     }
 }

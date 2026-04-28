@@ -4,7 +4,6 @@ using System.Linq;
 using Couture.Plugins.MultipleQuotes.Constants;
 using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Xrm.Sdk;
-using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Query;
 
 namespace Couture.Plugins.MultipleQuotes.Helpers
@@ -144,7 +143,6 @@ namespace Couture.Plugins.MultipleQuotes.Helpers
             var quotes = RetrieveSiblingQuotes(opportunityId, Guid.Empty);
 
             decimal total = 0m;
-            string currencyCode = null;
 
             foreach (var quote in quotes)
             {
@@ -170,14 +168,13 @@ namespace Couture.Plugins.MultipleQuotes.Helpers
                 [SchemaConstants.Opportunity.ActiveWonQuotesTotal] = new Money(total)
             };
 
-            // Suppress our own cascade plugins so this Update doesn't bounce
-            // back through the quote pipeline.
-            var request = new UpdateRequest { Target = update };
-            request[SchemaConstants.SharedVariableKeys.SuppressCascade] = true;
-            _service.Execute(request);
+            // The write targets the opportunity, but our rollup plugin only
+            // fires on quote Create/Update/Delete – so this update can't
+            // recurse back into us. A plain Update is enough.
+            _service.Update(update);
 
-            _tracing.Trace("Opportunity {0} rollup refreshed to {1}{2}",
-                opportunityId, total, currencyCode);
+            _tracing.Trace("Opportunity {0} rollup refreshed to {1}",
+                opportunityId, total);
         }
     }
 }

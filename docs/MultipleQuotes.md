@@ -88,8 +88,10 @@ new opportunity updates **both** opportunities.
   `LoseOpportunityRequest`. These execute inside the parent transaction, so
   intermediate rollup values are never committed – only the final refresh at
   the end of each cascade persists.
-* The rollup plugin checks `SuppressCascade` and `Depth > 3` before doing any
-  work, which stops the rollup write from re-triggering itself.
+* The rollup write targets the **opportunity** but the rollup plugin only
+  fires on **quote** Create/Update/Delete, so it cannot recurse into itself.
+  A `Depth > 3` guard is kept as a belt-and-braces safeguard against
+  unrelated chains of plugins triggering quote updates.
 
 ## 6. Manual overrides
 
