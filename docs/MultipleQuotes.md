@@ -51,6 +51,8 @@ All steps are **synchronous** and run as the calling user.
 | 4 | `OpportunityQuoteRollupPlugin`     | Create  | quote          | PostOperation 40 | –                                                  | –                                                     |
 | 5 | `OpportunityQuoteRollupPlugin`     | Update  | quote          | PostOperation 40 | totalamount, statecode, statuscode, opportunityid  | PreImage `preImage`: opportunityid, statecode         |
 | 6 | `OpportunityQuoteRollupPlugin`     | Delete  | quote          | PostOperation 40 | –                                                  | PreImage `preImage`: opportunityid                    |
+| 7 | `CalculateDeliveryPricingPlugin`   | Create  | quotedetail    | PostOperation 40 | –                                                  | PostImage `PostImage`: priceperunit, eb_isincomingmaterial, quoteid, productid |
+| 8 | `CalculateDeliveryPricingPlugin`   | Update  | quotedetail    | PostOperation 40 | priceperunit, eb_isincomingmaterial                | PostImage `PostImage`: priceperunit, eb_isincomingmaterial, quoteid, productid |
 
 ## 4. Behaviour summary
 

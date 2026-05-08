@@ -9,6 +9,7 @@ namespace Couture.Plugins.MultipleQuotes.Constants
         {
             public const string Quote = "quote";
             public const string QuoteClose = "quoteclose";
+            public const string QuoteDetail = "quotedetail";
             public const string Opportunity = "opportunity";
             public const string OpportunityClose = "opportunityclose";
         }
@@ -33,6 +34,35 @@ namespace Couture.Plugins.MultipleQuotes.Constants
             /// totalamount for every quote that is currently Active or Won.
             /// Update the prefix/name to match the target environment.
             public const string ActiveWonQuotesTotal = "new_activewonquotestotal";
+
+            // Freight inputs and pre-calculated rates used by
+            // CalculateDeliveryPricingPlugin.
+            public const string ShippingRatePerHour = "eb_shippingrateperhour";
+            public const string CycleTime = "eb_cycletime";
+            public const string LoadTime = "eb_loadtime";
+            public const string UnloadTime = "eb_unloadtime";
+            public const string TrailerRatePerTon = "eb_trailerrateton";
+            public const string StraightTruckRatePerTon = "eb_straighttruckrateton";
+        }
+
+        internal static class QuoteDetail
+        {
+            public const string Id = "quotedetailid";
+            public const string QuoteId = "quoteid";
+            public const string ProductId = "productid";
+            public const string PricePerUnit = "priceperunit";
+            public const string IsIncomingMaterial = "eb_isincomingmaterial";
+            public const string DeliveredPriceTrailer = "eb_deliveredpricetrailer";
+            public const string DeliveredPriceStraight = "eb_deliveredpricestraight";
+        }
+
+        internal static class Freight
+        {
+            public const decimal TrailerTonsPerLoad = 25m;
+            public const decimal StraightTruckTonsPerLoad = 20m;
+            public const int MinutesPerHour = 60;
+            public const int DefaultLoadTimeMinutes = 10;
+            public const int DefaultUnloadTimeMinutes = 10;
         }
 
         internal static class QuoteState
