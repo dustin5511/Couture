@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  REFERENCE-ONLY entity definition for eb_taxrate.
+
+  Building Dataverse Entity.xml by hand is brittle (the schema has hundreds
+  of optional but order-sensitive elements). This file documents the *shape*
+  of the table the flow expects but is **not** wired into Customizations.xml,
+  so a stock `pac solution pack` will not import it. To deploy:
+
+    Option A (recommended): build the table by hand using TableSchema.md,
+    then import the solution ZIP — which contains only the flow.
+
+    Option B (advanced): export the table from a working environment using
+    `pac solution export`, drop the resulting Entities/eb_taxrate/ folder
+    in place of this file, and add the corresponding <Entity> entry to
+    Customizations.xml.
+-->
+<Entity>
+  <EntityInfo>
+    <entity Name="eb_taxrate">
+      <LocalizedNames>
+        <LocalizedName description="Tax Rate" languagecode="1033" />
+      </LocalizedNames>
+      <LocalizedCollectionNames>
+        <LocalizedCollectionName description="Tax Rates" languagecode="1033" />
+      </LocalizedCollectionNames>
+      <Descriptions>
+        <Description description="Sales-tax rate by state and ZIP code, refreshed monthly from each state's published rate file." languagecode="1033" />
+      </Descriptions>
+      <attributes>
+        <attribute PhysicalName="eb_name">
+          <Type>nvarchar</Type>
+          <Length>60</Length>
+          <RequiredLevel>systemrequired</RequiredLevel>
+          <displaynames><displayname description="Name" languagecode="1033" /></displaynames>
+        </attribute>
+        <attribute PhysicalName="eb_state">
+          <Type>nvarchar</Type>
+          <Length>2</Length>
+          <RequiredLevel>required</RequiredLevel>
+          <displaynames><displayname description="State" languagecode="1033" /></displaynames>
+        </attribute>
+        <attribute PhysicalName="eb_zip">
+          <Type>nvarchar</Type>
+          <Length>10</Length>
+          <RequiredLevel>required</RequiredLevel>
+          <displaynames><displayname description="ZIP" languagecode="1033" /></displaynames>
+        </attribute>
+        <attribute PhysicalName="eb_city">
+          <Type>nvarchar</Type><Length>100</Length>
+          <displaynames><displayname description="City" languagecode="1033" /></displaynames>
+        </attribute>
+        <attribute PhysicalName="eb_county">
+          <Type>nvarchar</Type><Length>100</Length>
+          <displaynames><displayname description="County" languagecode="1033" /></displaynames>
+        </attribute>
+        <attribute PhysicalName="eb_staterate">
+          <Type>decimal</Type><Precision>6</Precision>
+          <MinValue>0</MinValue><MaxValue>1</MaxValue>
+          <displaynames><displayname description="State Rate" languagecode="1033" /></displaynames>
+        </attribute>
+        <attribute PhysicalName="eb_cityrate">
+          <Type>decimal</Type><Precision>6</Precision>
+          <MinValue>0</MinValue><MaxValue>1</MaxValue>
+          <displaynames><displayname description="City Rate" languagecode="1033" /></displaynames>
+        </attribute>
+        <attribute PhysicalName="eb_countyrate">
+          <Type>decimal</Type><Precision>6</Precision>
+          <MinValue>0</MinValue><MaxValue>1</MaxValue>
+          <displaynames><displayname description="County Rate" languagecode="1033" /></displaynames>
+        </attribute>
+        <attribute PhysicalName="eb_transitrate">
+          <Type>decimal</Type><Precision>6</Precision>
+          <MinValue>0</MinValue><MaxValue>1</MaxValue>
+          <displaynames><displayname description="Transit Rate" languagecode="1033" /></displaynames>
+        </attribute>
+        <attribute PhysicalName="eb_specialrate">
+          <Type>decimal</Type><Precision>6</Precision>
+          <MinValue>0</MinValue><MaxValue>1</MaxValue>
+          <displaynames><displayname description="Special District Rate" languagecode="1033" /></displaynames>
+        </attribute>
+        <attribute PhysicalName="eb_combinedrate">
+          <Type>decimal</Type><Precision>6</Precision>
+          <MinValue>0</MinValue><MaxValue>1</MaxValue>
+          <displaynames><displayname description="Combined Rate" languagecode="1033" /></displaynames>
+        </attribute>
+        <attribute PhysicalName="eb_effectivedate">
+          <Type>datetime</Type><Format>dateonly</Format>
+          <displaynames><displayname description="Effective Date" languagecode="1033" /></displaynames>
+        </attribute>
+        <attribute PhysicalName="eb_lastrefreshedon">
+          <Type>datetime</Type><Format>datetime</Format>
+          <displaynames><displayname description="Last Refreshed On" languagecode="1033" /></displaynames>
+        </attribute>
+        <attribute PhysicalName="eb_sourceurl">
+          <Type>nvarchar</Type><Length>500</Length><Format>url</Format>
+          <displaynames><displayname description="Source URL" languagecode="1033" /></displaynames>
+        </attribute>
+      </attributes>
+      <EntityKeys>
+        <EntityKey Name="State + ZIP">
+          <LogicalName>eb_taxrate_state_zip</LogicalName>
+          <KeyAttributes>
+            <KeyAttribute>eb_state</KeyAttribute>
+            <KeyAttribute>eb_zip</KeyAttribute>
+          </KeyAttributes>
+        </EntityKey>
+      </EntityKeys>
+    </entity>
+  </EntityInfo>
+</Entity>

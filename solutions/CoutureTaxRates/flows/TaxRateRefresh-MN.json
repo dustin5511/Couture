@@ -1,0 +1,191 @@
+{
+  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+  "_comment": "Inner flow definition. Paste this into a new cloud flow via 'My flows -> + New flow -> Import package' OR (for surgical edits) into the Code view of a flow you already created. The wrapper file at src/Workflows/ contains this same definition with the solution-import metadata.",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "$connections": { "defaultValue": {}, "type": "Object" },
+    "$authentication": { "defaultValue": {}, "type": "SecureObject" }
+  },
+  "triggers": {
+    "Recurrence": {
+      "type": "Recurrence",
+      "recurrence": {
+        "frequency": "Month",
+        "interval": 1,
+        "schedule": { "monthDays": [1], "hours": ["02"], "minutes": [0] },
+        "timeZone": "Central Standard Time"
+      }
+    }
+  },
+  "actions": {
+    "List_configuration_rows": {
+      "type": "OpenApiConnection",
+      "inputs": {
+        "host": {
+          "connectionName": "shared_commondataserviceforapps",
+          "operationId": "ListRecords",
+          "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+        },
+        "parameters": {
+          "entityName": "eb_configurations",
+          "$filter": "eb_name eq 'MN_TaxRateSourceUrl'",
+          "$select": "eb_name,eb_value",
+          "$top": 1
+        },
+        "authentication": "@parameters('$authentication')"
+      },
+      "runAfter": {}
+    },
+    "Compose_SourceUrl": {
+      "type": "Compose",
+      "inputs": "@first(outputs('List_configuration_rows')?['body/value'])?['eb_value']",
+      "runAfter": { "List_configuration_rows": ["Succeeded"] }
+    },
+    "Compose_FileName": {
+      "type": "Compose",
+      "inputs": "@concat('MN_Rates_', formatDateTime(utcNow(), 'yyyy-MM-dd'), '.xlsx')",
+      "runAfter": { "Compose_SourceUrl": ["Succeeded"] }
+    },
+    "Compose_StateCode": {
+      "type": "Compose",
+      "inputs": "MN",
+      "runAfter": { "Compose_FileName": ["Succeeded"] }
+    },
+    "HTTP_-_Download_rate_file": {
+      "type": "Http",
+      "inputs": {
+        "method": "GET",
+        "uri": "@outputs('Compose_SourceUrl')"
+      },
+      "runAfter": { "Compose_StateCode": ["Succeeded"] },
+      "retryPolicy": { "type": "exponential", "count": 4, "interval": "PT10S" },
+      "_comment_premium": "HTTP is a premium connector. If you don't have premium, replace this action with 'Get file content using path' from a SharePoint folder a human or another flow has dropped the file in."
+    },
+    "Create_file_in_SharePoint": {
+      "type": "OpenApiConnection",
+      "inputs": {
+        "host": {
+          "connectionName": "shared_sharepointonline",
+          "operationId": "CreateFile",
+          "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline"
+        },
+        "parameters": {
+          "dataset": "https://YOURTENANT.sharepoint.com/sites/CoutureOps",
+          "folderPath": "/Shared Documents/TaxRates",
+          "name": "@outputs('Compose_FileName')",
+          "body": "@body('HTTP_-_Download_rate_file')"
+        },
+        "authentication": "@parameters('$authentication')"
+      },
+      "runAfter": { "HTTP_-_Download_rate_file": ["Succeeded"] }
+    },
+    "List_rows_in_Excel_table": {
+      "type": "OpenApiConnection",
+      "inputs": {
+        "host": {
+          "connectionName": "shared_excelonlinebusiness",
+          "operationId": "GetItems",
+          "apiId": "/providers/Microsoft.PowerApps/apis/shared_excelonlinebusiness"
+        },
+        "parameters": {
+          "source": "sites/YOURTENANT.sharepoint.com,SITE_GUID,WEB_GUID",
+          "drive": "DRIVE_GUID",
+          "file": "@body('Create_file_in_SharePoint')?['ItemId']",
+          "table": "Rates"
+        },
+        "authentication": "@parameters('$authentication')"
+      },
+      "runAfter": { "Create_file_in_SharePoint": ["Succeeded"] },
+      "_comment": "Pick the source/drive/file/table values from the connector's UI dropdowns when you open the flow — they require resolved IDs that you can't reliably hand-author."
+    },
+    "Apply_to_each_row": {
+      "type": "Foreach",
+      "foreach": "@outputs('List_rows_in_Excel_table')?['body/value']",
+      "runtimeConfiguration": {
+        "concurrency": { "repetitions": 20 }
+      },
+      "actions": {
+        "Compose_parsed_row": {
+          "type": "Compose",
+          "inputs": {
+            "zip":           "@trim(string(items('Apply_to_each_row')?['ZIP Code']))",
+            "city":          "@trim(string(items('Apply_to_each_row')?['City']))",
+            "county":        "@trim(string(items('Apply_to_each_row')?['County']))",
+            "stateRate":     "@if(empty(items('Apply_to_each_row')?['State Rate']), 0, float(items('Apply_to_each_row')?['State Rate']))",
+            "cityRate":      "@if(empty(items('Apply_to_each_row')?['City Rate']), 0, float(items('Apply_to_each_row')?['City Rate']))",
+            "countyRate":    "@if(empty(items('Apply_to_each_row')?['County Rate']), 0, float(items('Apply_to_each_row')?['County Rate']))",
+            "transitRate":   "@if(empty(items('Apply_to_each_row')?['Transit Rate']), 0, float(items('Apply_to_each_row')?['Transit Rate']))",
+            "specialRate":   "@if(empty(items('Apply_to_each_row')?['Special Rate']), 0, float(items('Apply_to_each_row')?['Special Rate']))",
+            "combinedRate":  "@if(empty(items('Apply_to_each_row')?['Combined Rate']), 0, float(items('Apply_to_each_row')?['Combined Rate']))",
+            "effectiveDate": "@formatDateTime(items('Apply_to_each_row')?['Effective Date'], 'yyyy-MM-dd')"
+          }
+        },
+        "Upsert_tax_rate": {
+          "type": "OpenApiConnection",
+          "inputs": {
+            "host": {
+              "connectionName": "shared_commondataserviceforapps",
+              "operationId": "UpdateRecord",
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps"
+            },
+            "parameters": {
+              "entityName": "eb_taxrates",
+              "recordId": "@concat('eb_state=''', outputs('Compose_StateCode'), ''',eb_zip=''', outputs('Compose_parsed_row')?['zip'], '''')",
+              "item/eb_name":            "@concat(outputs('Compose_StateCode'), '-', outputs('Compose_parsed_row')?['zip'])",
+              "item/eb_state":           "@outputs('Compose_StateCode')",
+              "item/eb_zip":             "@outputs('Compose_parsed_row')?['zip']",
+              "item/eb_city":            "@outputs('Compose_parsed_row')?['city']",
+              "item/eb_county":          "@outputs('Compose_parsed_row')?['county']",
+              "item/eb_staterate":       "@outputs('Compose_parsed_row')?['stateRate']",
+              "item/eb_cityrate":        "@outputs('Compose_parsed_row')?['cityRate']",
+              "item/eb_countyrate":      "@outputs('Compose_parsed_row')?['countyRate']",
+              "item/eb_transitrate":     "@outputs('Compose_parsed_row')?['transitRate']",
+              "item/eb_specialrate":     "@outputs('Compose_parsed_row')?['specialRate']",
+              "item/eb_combinedrate":    "@outputs('Compose_parsed_row')?['combinedRate']",
+              "item/eb_effectivedate":   "@outputs('Compose_parsed_row')?['effectiveDate']",
+              "item/eb_lastrefreshedon": "@utcNow()",
+              "item/eb_sourceurl":       "@outputs('Compose_SourceUrl')"
+            },
+            "authentication": "@parameters('$authentication')"
+          },
+          "runAfter": { "Compose_parsed_row": ["Succeeded"] }
+        }
+      },
+      "runAfter": { "List_rows_in_Excel_table": ["Succeeded"] }
+    },
+    "Delete_downloaded_file": {
+      "type": "OpenApiConnection",
+      "inputs": {
+        "host": {
+          "connectionName": "shared_sharepointonline",
+          "operationId": "DeleteFile",
+          "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline"
+        },
+        "parameters": {
+          "dataset": "https://YOURTENANT.sharepoint.com/sites/CoutureOps",
+          "id": "@body('Create_file_in_SharePoint')?['ItemId']"
+        },
+        "authentication": "@parameters('$authentication')"
+      },
+      "runAfter": { "Apply_to_each_row": ["Succeeded", "Failed"] }
+    },
+    "Send_completion_email": {
+      "type": "OpenApiConnection",
+      "inputs": {
+        "host": {
+          "connectionName": "shared_office365",
+          "operationId": "SendEmailV2",
+          "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365"
+        },
+        "parameters": {
+          "emailMessage/To": "ops@yourtenant.com",
+          "emailMessage/Subject": "@concat('Tax Rate Refresh - ', outputs('Compose_StateCode'), ' - ', formatDateTime(utcNow(), 'yyyy-MM-dd'))",
+          "emailMessage/Body": "<p>Refreshed <strong>@{length(outputs('List_rows_in_Excel_table')?['body/value'])}</strong> rows for state <strong>@{outputs('Compose_StateCode')}</strong> from <a href=\"@{outputs('Compose_SourceUrl')}\">source</a>.</p>",
+          "emailMessage/Importance": "Normal"
+        },
+        "authentication": "@parameters('$authentication')"
+      },
+      "runAfter": { "Delete_downloaded_file": ["Succeeded", "Skipped", "Failed"] }
+    }
+  }
+}
