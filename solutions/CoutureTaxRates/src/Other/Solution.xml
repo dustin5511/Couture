@@ -58,7 +58,7 @@
       </Addresses>
     </Publisher>
     <RootComponents>
-      <RootComponent type="29" schemaName="TaxRateRefreshMN" behavior="0" />
+      <RootComponent type="1" schemaName="eb_taxrate" behavior="0" />
     </RootComponents>
     <MissingDependencies />
   </SolutionManifest>
