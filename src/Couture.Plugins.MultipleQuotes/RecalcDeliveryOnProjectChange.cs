@@ -253,16 +253,25 @@ namespace Couture.Plugins.MultipleQuotes
                     SchemaConstants.Opportunity.UnloadTime));
         }
 
-        /// Queries every QuoteDetail under the given Quote, sums the
-        /// extended delivered amounts for both truck types, and writes
-        /// the totals to the parent Quote record.
+        /// Full 5-field rollup: FOB total, delivered totals (trailer/
+        /// straight), and tax totals (trailer/straight). Mirrors the
+        /// rollup in CalculateDeliveryPricingPlugin so the two code
+        /// paths converge on identical Quote-level numbers regardless of
+        /// whether the trigger was a quotedetail edit or an opportunity
+        /// freight change.
         private static void RollUpQuoteTotals(PluginContext ctx, Guid quoteId)
         {
+            var includeTaxInDelivered = ShouldIncludeTaxInDeliveredTotal(ctx, quoteId);
+
             var query = new QueryExpression(SchemaConstants.Entities.QuoteDetail)
             {
                 ColumnSet = new ColumnSet(
+                    SchemaConstants.QuoteDetail.PricePerUnit,
+                    SchemaConstants.QuoteDetail.Quantity,
                     SchemaConstants.QuoteDetail.ExtendedDeliveredTrailer,
-                    SchemaConstants.QuoteDetail.ExtendedDeliveredStraight),
+                    SchemaConstants.QuoteDetail.ExtendedDeliveredStraight,
+                    SchemaConstants.QuoteDetail.TaxAmountTrailer,
+                    SchemaConstants.QuoteDetail.TaxAmountStraight),
                 Criteria = new FilterExpression(LogicalOperator.And)
                 {
                     Conditions =
@@ -276,32 +285,76 @@ namespace Couture.Plugins.MultipleQuotes
 
             var lines = ctx.Service.RetrieveMultiple(query);
 
+            var fobTotal = 0m;
             var totalTrailer = 0m;
             var totalStraight = 0m;
+            var taxTotalTrailer = 0m;
+            var taxTotalStraight = 0m;
 
             foreach (var line in lines.Entities)
             {
-                var extT = line.GetAttributeValue<Money>(
-                    SchemaConstants.QuoteDetail.ExtendedDeliveredTrailer);
-                var extS = line.GetAttributeValue<Money>(
-                    SchemaConstants.QuoteDetail.ExtendedDeliveredStraight);
+                var ppu = line.GetAttributeValue<Money>(SchemaConstants.QuoteDetail.PricePerUnit);
+                var qty = line.GetAttributeValue<decimal>(SchemaConstants.QuoteDetail.Quantity);
+                var extT = line.GetAttributeValue<Money>(SchemaConstants.QuoteDetail.ExtendedDeliveredTrailer);
+                var extS = line.GetAttributeValue<Money>(SchemaConstants.QuoteDetail.ExtendedDeliveredStraight);
+                var taxT = line.GetAttributeValue<Money>(SchemaConstants.QuoteDetail.TaxAmountTrailer);
+                var taxS = line.GetAttributeValue<Money>(SchemaConstants.QuoteDetail.TaxAmountStraight);
 
+                if (ppu != null) fobTotal += ppu.Value * qty;
                 if (extT != null) totalTrailer += extT.Value;
                 if (extS != null) totalStraight += extS.Value;
+                if (taxT != null) taxTotalTrailer += taxT.Value;
+                if (taxS != null) taxTotalStraight += taxS.Value;
             }
 
+            if (includeTaxInDelivered)
+            {
+                totalTrailer += taxTotalTrailer;
+                totalStraight += taxTotalStraight;
+            }
+
+            fobTotal = Math.Round(fobTotal, 2);
             totalTrailer = Math.Round(totalTrailer, 2);
             totalStraight = Math.Round(totalStraight, 2);
+            taxTotalTrailer = Math.Round(taxTotalTrailer, 2);
+            taxTotalStraight = Math.Round(taxTotalStraight, 2);
 
             var updateQuote = new Entity(SchemaConstants.Entities.Quote, quoteId)
             {
+                [SchemaConstants.Quote.FobTotal] = new Money(fobTotal),
                 [SchemaConstants.Quote.TotalDeliveredTrailer] = new Money(totalTrailer),
-                [SchemaConstants.Quote.TotalDeliveredStraight] = new Money(totalStraight)
+                [SchemaConstants.Quote.TotalDeliveredStraight] = new Money(totalStraight),
+                [SchemaConstants.Quote.TaxTotalTrailer] = new Money(taxTotalTrailer),
+                [SchemaConstants.Quote.TaxTotalStraight] = new Money(taxTotalStraight)
             };
             ctx.Service.Update(updateQuote);
 
-            ctx.Tracing.Trace("Quote {0} totals – Trailer={1}, Straight={2}",
-                quoteId, totalTrailer, totalStraight);
+            ctx.Tracing.Trace(
+                "Quote {0} totals – FOB={1}, DelTrailer={2}, DelStraight={3}, TaxT={4}, TaxS={5}",
+                quoteId, fobTotal, totalTrailer, totalStraight,
+                taxTotalTrailer, taxTotalStraight);
+        }
+
+        private static bool ShouldIncludeTaxInDeliveredTotal(PluginContext ctx, Guid quoteId)
+        {
+            var quote = ctx.Service.Retrieve(
+                SchemaConstants.Entities.Quote,
+                quoteId,
+                new ColumnSet(SchemaConstants.Quote.OpportunityId));
+            var oppRef = quote.GetAttributeValue<EntityReference>(
+                SchemaConstants.Quote.OpportunityId);
+            if (oppRef == null) return false;
+
+            var opp = ctx.Service.Retrieve(
+                SchemaConstants.Entities.Opportunity,
+                oppRef.Id,
+                new ColumnSet(SchemaConstants.Opportunity.DeliveryPreference));
+            var preference = opp.GetAttributeValue<OptionSetValue>(
+                SchemaConstants.Opportunity.DeliveryPreference);
+            if (preference == null) return false;
+
+            return preference.Value == SchemaConstants.DeliveryPreference.Delivery
+                || preference.Value == SchemaConstants.DeliveryPreference.FobAndDelivery;
         }
     }
 }

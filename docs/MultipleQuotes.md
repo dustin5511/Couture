@@ -79,45 +79,52 @@ assembly to register with the Plugin Registration Tool.
 
 All steps are **synchronous** and run as the calling user.
 
-| #  | Plugin class                       | Message | Primary entity | Stage            | Filtering attrs                                                                                                | Images                                                                                                                                       |
-| -- | ---------------------------------- | ------- | -------------- | ---------------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1  | `QuoteCreateValidationPlugin`      | Create  | quote          | PreOperation 20  | –                                                                                                              | –                                                                                                                                            |
-| 2  | `QuoteWinPlugin`                   | Win     | quote          | PreOperation 20  | –                                                                                                              | –                                                                                                                                            |
-| 3  | `QuoteWinPlugin`                   | Win     | quote          | PostOperation 40 | –                                                                                                              | –                                                                                                                                            |
-| 4  | `QuoteClosePlugin`                 | Close   | quote          | PostOperation 40 | –                                                                                                              | –                                                                                                                                            |
-| 5  | `OpportunityQuoteRollupPlugin`     | Create  | quote          | PostOperation 40 | –                                                                                                              | –                                                                                                                                            |
-| 6  | `OpportunityQuoteRollupPlugin`     | Update  | quote          | PostOperation 40 | totalamount, statecode, statuscode, opportunityid                                                              | PreImage `preImage`: opportunityid, statecode                                                                                                |
-| 7  | `OpportunityQuoteRollupPlugin`     | Delete  | quote          | PostOperation 40 | –                                                                                                              | PreImage `preImage`: opportunityid                                                                                                           |
-| 8  | `CalculateDeliveryPricingPlugin`   | Create  | quotedetail    | PostOperation 40 | –                                                                                                              | PostImage `PostImage`: priceperunit, eb_isincomingmaterial, quoteid, productid                                                               |
-| 9  | `CalculateDeliveryPricingPlugin`   | Update  | quotedetail    | PostOperation 40 | priceperunit, eb_isincomingmaterial                                                                            | PostImage `PostImage`: priceperunit, eb_isincomingmaterial, quoteid, productid                                                               |
-| 10 | `CalculateTaxPlugin`               | Create  | quotedetail    | PostOperation 50 | –                                                                                                              | PostImage `PostImage`: priceperunit, quantity, eb_isincomingmaterial, quoteid, eb_deliveredpricetrailer, eb_deliveredpricestraight           |
-| 11 | `CalculateTaxPlugin`               | Update  | quotedetail    | PostOperation 50 | priceperunit, quantity, eb_isincomingmaterial, eb_deliveredpricetrailer, eb_deliveredpricestraight              | PostImage `PostImage`: priceperunit, quantity, eb_isincomingmaterial, quoteid, eb_deliveredpricetrailer, eb_deliveredpricestraight           |
-| 12 | `QuoteTotalsRollupPlugin`          | Create  | quotedetail    | PostOperation 60 | –                                                                                                              | PostImage `PostImage`: quoteid                                                                                                               |
-| 13 | `QuoteTotalsRollupPlugin`          | Update  | quotedetail    | PostOperation 60 | priceperunit, quantity, eb_isincomingmaterial, eb_deliveredpricetrailer, eb_deliveredpricestraight, eb_taxamounttrailer, eb_taxamountstraight, quoteid | PostImage `PostImage`: quoteid                                                                                                               |
-| 14 | `QuoteTotalsRollupPlugin`          | Delete  | quotedetail    | PostOperation 60 | –                                                                                                              | PreImage `PreImage`: quoteid                                                                                                                 |
+| #  | Plugin class                          | Message | Primary entity | Stage             | Order | Filtering attrs                                                                                                | Images                                                                                                                                       |
+| -- | ------------------------------------- | ------- | -------------- | ----------------- | ----- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1  | `ValidateFreightBeforeQuoteCreate`    | Create  | quote          | PreValidation 10  | 1     | –                                                                                                              | –                                                                                                                                            |
+| 2  | `QuoteWinPlugin`                      | Win     | quote          | PreOperation 20   | –     | –                                                                                                              | –                                                                                                                                            |
+| 3  | `QuoteWinPlugin`                      | Win     | quote          | PostOperation 40  | –     | –                                                                                                              | –                                                                                                                                            |
+| 4  | `QuoteClosePlugin`                    | Close   | quote          | PostOperation 40  | –     | –                                                                                                              | –                                                                                                                                            |
+| 5  | `OpportunityQuoteRollupPlugin`        | Create  | quote          | PostOperation 40  | –     | –                                                                                                              | –                                                                                                                                            |
+| 6  | `OpportunityQuoteRollupPlugin`        | Update  | quote          | PostOperation 40  | –     | totalamount, statecode, statuscode, opportunityid                                                              | PreImage `preImage`: opportunityid, statecode                                                                                                |
+| 7  | `OpportunityQuoteRollupPlugin`        | Delete  | quote          | PostOperation 40  | –     | –                                                                                                              | PreImage `preImage`: opportunityid                                                                                                           |
+| 8  | `PopulateIncomingMaterialFlag`        | Create  | quotedetail    | PreOperation 20   | 1     | –                                                                                                              | –                                                                                                                                            |
+| 9  | `CalculateDeliveryPricingPlugin`      | Create  | quotedetail    | PostOperation 40  | 2     | –                                                                                                              | PostImage `PostImage`: priceperunit, quantity, eb_isincomingmaterial, quoteid, productid                                                     |
+| 10 | `CalculateDeliveryPricingPlugin`      | Update  | quotedetail    | PostOperation 40  | 2     | priceperunit, quantity, eb_isincomingmaterial                                                                  | PostImage `PostImage`: priceperunit, quantity, eb_isincomingmaterial, quoteid, productid                                                     |
+| 11 | `CalculateTaxPlugin`                  | Create  | quotedetail    | PostOperation 50  | –     | –                                                                                                              | PostImage `PostImage`: priceperunit, quantity, eb_isincomingmaterial, quoteid, eb_deliveredpricetrailer, eb_deliveredpricestraight           |
+| 12 | `CalculateTaxPlugin`                  | Update  | quotedetail    | PostOperation 50  | –     | priceperunit, quantity, eb_isincomingmaterial, eb_deliveredpricetrailer, eb_deliveredpricestraight              | PostImage `PostImage`: priceperunit, quantity, eb_isincomingmaterial, quoteid, eb_deliveredpricetrailer, eb_deliveredpricestraight           |
+| 13 | `RecalcDeliveryOnProjectChange`       | Update  | opportunity    | PostOperation 40  | –     | eb_shippingrateperhour, eb_cycletime, eb_loadtime, eb_unloadtime                                               | PostImage `PostImage`: eb_shippingrateperhour, eb_cycletime, eb_loadtime, eb_unloadtime                                                      |
 
-Execution-order ranks (50 / 60) matter: `CalculateDeliveryPricingPlugin`
-(rank 40) writes delivered prices, `CalculateTaxPlugin` (rank 50) consumes
-them to compute tax, and `QuoteTotalsRollupPlugin` (rank 60) aggregates the
-results onto the Quote header. Lower ranks first; same rank is undefined
-order.
+Notes:
+
+- `ValidateFreightBeforeQuoteCreate` runs at **PreValidation (10)** rather than PreOperation. PreValidation fires *outside* the database transaction so a thrown `InvalidPluginExecutionException` is rolled back instantly with a clean error dialog and no half-completed work.
+- `PopulateIncomingMaterialFlag` runs at **PreOperation (20)** with Execution Order 1 on `quotedetail` Create — it mutates the Target directly (no extra Update) so the platform's insert carries the correct flag, and `CalculateDeliveryPricingPlugin` at rank 2 sees it.
+- `CalculateDeliveryPricingPlugin` writes per-line delivered prices, extended amounts, **and** rolls up the five Quote-level totals (FOB, delivered trailer/straight, tax trailer/straight). The rollup includes the per-line tax fields written by `CalculateTaxPlugin` at rank 50 on subsequent passes.
+- `RecalcDeliveryOnProjectChange` cascades opportunity freight-input edits to every active quote underneath, then runs the same 5-field rollup so the quote-level totals stay consistent.
 
 ## 4. Behaviour summary
 
 ### Creating a quote
 
-`QuoteCreateValidationPlugin` (PreOperation, Create on quote) reads the
-parent Opportunity and throws `InvalidPluginExecutionException` with a
-plain-English message if `eb_jobsitezip` or `eb_deliverypreference` is
-missing. The error surfaces on the form so the user can correct the
-Project record without leaving the page.
+`ValidateFreightBeforeQuoteCreate` (PreValidation, Create on quote) reads
+the parent Opportunity and throws `InvalidPluginExecutionException` with
+a single bulleted error message listing every missing field across two
+categories:
 
-On success the plugin also looks up the current tax rate and stamps
-`eb_taxratepercent` (as a percentage – e.g. `8.125`) directly on the
-target row before insert, so a freshly created Quote already shows the
-applied rate even before any line items exist. `CalculateTaxPlugin`
-re-syncs this field whenever line tax is recalculated, which keeps it
-honest if the opportunity ZIP changes after the quote was created.
+- Freight inputs: `eb_shippingrateperhour`, `eb_cycletime`, `eb_loadtime`,
+  `eb_unloadtime`.
+- Tax inputs: `eb_jobsitezip`, `eb_deliverypreference`.
+
+The error surfaces on the form so the user can correct the Project record
+without leaving the page.
+
+On success the plugin also looks up the current tax rate via
+`TaxRateService` and stamps `eb_taxratepercent` (as a percentage – e.g.
+`8.125`) directly on the target row before insert, so a freshly created
+Quote already shows the applied rate even before any line items exist.
+`CalculateTaxPlugin` re-syncs this field whenever line tax is
+recalculated, which keeps it honest if the opportunity ZIP changes after
+the quote was created.
 
 ### Calculating tax on a quote line
 
@@ -141,8 +148,10 @@ fail a save than silently store $0 tax on a six-figure order.
 
 ### Aggregating Quote totals
 
-`QuoteTotalsRollupPlugin` runs on every quote-detail Create / Update /
-Delete and rewrites all five Quote-level totals:
+`CalculateDeliveryPricingPlugin.RollUpQuoteTotals` runs at the end of
+every quote-detail Create / Update (and is also called by
+`RecalcDeliveryOnProjectChange` when freight inputs change on the
+opportunity). It rewrites all five Quote-level totals:
 
 ```
 eb_fobtotal               = Σ priceperunit × quantity                  (always)

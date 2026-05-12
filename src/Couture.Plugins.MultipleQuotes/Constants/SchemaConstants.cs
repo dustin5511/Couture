@@ -12,12 +12,25 @@ namespace Couture.Plugins.MultipleQuotes.Constants
             public const string QuoteDetail = "quotedetail";
             public const string Opportunity = "opportunity";
             public const string OpportunityClose = "opportunityclose";
+            public const string Product = "product";
             public const string TaxRate = "eb_taxrate";
+        }
+
+        internal static class Product
+        {
+            /// Boolean flag on the Product record that marks it as incoming
+            /// material (rubble, common dirt, etc.). PopulateIncomingMaterialFlag
+            /// copies it onto each new Quote Product line as
+            /// QuoteDetail.IsIncomingMaterial.
+            public const string IncomingMaterial = "eb_incomingmaterial";
         }
 
         internal static class Quote
         {
             public const string Id = "quoteid";
+            /// Alias for Id used by code paths that name the primary key
+            /// after the entity (e.g. RecalcDeliveryOnProjectChange).
+            public const string QuoteId = Id;
             public const string OpportunityId = "opportunityid";
             public const string TotalAmount = "totalamount";
             public const string StateCode = "statecode";
@@ -29,8 +42,8 @@ namespace Couture.Plugins.MultipleQuotes.Constants
             // totals include their matching tax bucket when delivery
             // preference allows.
             public const string FobTotal = "eb_fobtotal";
-            public const string DeliveredTotalTrailer = "eb_totaldeliveredtrailer";
-            public const string DeliveredTotalStraight = "eb_totaldeliveredstraight";
+            public const string TotalDeliveredTrailer = "eb_totaldeliveredtrailer";
+            public const string TotalDeliveredStraight = "eb_totaldeliveredstraight";
             public const string TaxTotalTrailer = "eb_taxtotaltrailer";
             public const string TaxTotalStraight = "eb_taxtotalstraight";
 
@@ -62,6 +75,11 @@ namespace Couture.Plugins.MultipleQuotes.Constants
             public const string TrailerRatePerTon = "eb_trailerrateton";
             public const string StraightTruckRatePerTon = "eb_straighttruckrateton";
 
+            /// Cycle + Load + Unload time on the Opportunity – cached so
+            /// RecalcDeliveryOnProjectChange doesn't have to recompute it
+            /// every time a Quote Product is touched.
+            public const string TotalTripMinutes = "eb_totaltripminutes";
+
             // Inputs gating quote creation and feeding the tax lookup.
             public const string JobsiteZip = "eb_jobsitezip";
             public const string DeliveryPreference = "eb_deliverypreference";
@@ -77,6 +95,12 @@ namespace Couture.Plugins.MultipleQuotes.Constants
             public const string IsIncomingMaterial = "eb_isincomingmaterial";
             public const string DeliveredPriceTrailer = "eb_deliveredpricetrailer";
             public const string DeliveredPriceStraight = "eb_deliveredpricestraight";
+
+            // Per-line extended delivered amounts (quantity × delivered
+            // price/ton). Used by CalculateDeliveryPricingPlugin and rolled
+            // up to the parent Quote.
+            public const string ExtendedDeliveredTrailer = "eb_extendeddeliveredtrailer";
+            public const string ExtendedDeliveredStraight = "eb_extendeddeliveredstraight";
 
             // Per-line tax in each scenario. Different because tax applies
             // to the full delivered price (which includes freight) and the
