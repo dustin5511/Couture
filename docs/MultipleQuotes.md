@@ -52,7 +52,7 @@ quote-creation validation / tax calculation pipeline:
 The tax calculation depends on the three-column `eb_taxrate` table from
 the **CoutureTaxRates** solution (`solutions/CoutureTaxRates/`):
 `eb_state`, `eb_zip`, `eb_rate` (plus the system primary name). The
-plugin queries it with `eb_state = "Minnesota"` and `eb_zip BeginsWith
+plugin queries it with `eb_state = "MN"` and `eb_zip BeginsWith
 <cleaned jobsite ZIP>` and reads `eb_rate` as a **fraction** (e.g.
 `0.081250` = 8.125%). Build that solution's table before deploying the
 assembly.
@@ -139,7 +139,7 @@ Preference value:
 | `2` Delivery        | `deliveredpricetrailer × qty × rate` (0 if incoming) | `deliveredpricestraight × qty × rate` (0 if incoming) |
 | `3` FOB + Delivery  | same as Delivery                                   | same as Delivery                                    |
 
-Rate is resolved by `TaxRateService.LookupCombinedRate("Minnesota",
+Rate is resolved by `TaxRateService.LookupCombinedRate("MN",
 opportunity.eb_jobsitezip)`. The service strips non-digit characters from
 the ZIP and queries `eb_taxrate` with `BeginsWith`, so user-entered ZIPs
 in any of the three common formats (5-digit, 9-digit dashed, 9-digit

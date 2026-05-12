@@ -124,10 +124,11 @@ namespace Couture.Plugins.MultipleQuotes.Constants
             public const string Rate = "eb_rate";
             public const string EffectiveDate = "eb_effectivedate";
 
-            /// State name stored on each eb_taxrate row. The MN refresh flow
-            /// writes the full state name (not the 2-letter code) so the
-            /// lookup uses the same literal.
-            public const string MinnesotaStateName = "Minnesota";
+            /// State value stored on each eb_taxrate row for Minnesota.
+            /// We use the 2-letter abbreviation rather than the full name
+            /// because that's what the spreadsheet load uses; the literal
+            /// must match exactly (case-sensitive).
+            public const string MinnesotaStateName = "MN";
         }
 
         /// Option-set values for Opportunity.eb_deliverypreference.

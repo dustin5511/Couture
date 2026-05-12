@@ -24,7 +24,7 @@ namespace Couture.Plugins.MultipleQuotes
     ///
     /// Tax rate is resolved by stripping non-digits from the opportunity's
     /// eb_jobsitezip and querying eb_taxrate for the row whose eb_zip
-    /// begins with that prefix in state "Minnesota". See TaxRateService.
+    /// begins with that prefix in state "MN". See TaxRateService.
     ///
     /// Register on:
     ///   Message=Create, PrimaryEntity=quotedetail, Stage=PostOperation (40)
@@ -135,7 +135,7 @@ namespace Couture.Plugins.MultipleQuotes
                 // visible rather than silently storing $0 tax on what could
                 // be a $100k order.
                 throw new InvalidPluginExecutionException(
-                    $"No tax rate found for Jobsite ZIP '{rawZip}' in state 'Minnesota'. " +
+                    $"No tax rate found for Jobsite ZIP '{rawZip}' in state 'MN'. " +
                     "Check the eb_taxrate table and the ZIP on the Project.");
             }
 

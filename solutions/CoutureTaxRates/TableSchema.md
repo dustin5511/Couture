@@ -39,9 +39,11 @@ Decimal `eb_rate` stores the rate as a fraction (`0.068750` = 6.875%). The
 refresh flow writes the MN DOR "Combined Rate" column straight into this
 field with no transformation.
 
-`eb_state` stores the **full state name** (`Minnesota`), not the 2-letter
-code. The MN refresh flow writes that literal; the `CalculateTaxPlugin`
-queries by the same literal. ZIPs in `eb_zip` are stored as 9-digit strings
+`eb_state` stores the 2-letter state code (`MN`). The refresh flow writes
+that literal; the `CalculateTaxPlugin` queries by
+`SchemaConstants.TaxRate.MinnesotaStateName` which is also `"MN"`. The
+match is case-sensitive — keep them in sync. ZIPs in `eb_zip` are stored
+as 9-digit strings
 with no dashes (e.g. `553371234`). The plugin strips non-digits from the
 opportunity's `eb_jobsitezip` and uses `BeginsWith`, so a 5-digit ZIP on the
 opportunity still resolves to the right rate row.

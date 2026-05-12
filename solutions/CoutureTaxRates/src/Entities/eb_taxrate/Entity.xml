@@ -63,7 +63,7 @@
             <displayname description="Name" languagecode="1033" />
           </displaynames>
           <Descriptions>
-            <Description description="Display name for the row (e.g. Minnesota-553371234)." languagecode="1033" />
+            <Description description="Display name for the row (e.g. MN-553371234)." languagecode="1033" />
           </Descriptions>
         </attribute>
         <attribute PhysicalName="eb_state">
@@ -88,7 +88,7 @@
             <displayname description="State" languagecode="1033" />
           </displaynames>
           <Descriptions>
-            <Description description="Full state name (e.g. 'Minnesota'). Part of the (state, ZIP) alternate key. The refresh flow writes the full name; the CalculateTaxPlugin queries by that same literal." languagecode="1033" />
+            <Description description="2-letter US state code (e.g. 'MN'). Part of the (state, ZIP) alternate key. The refresh flow writes the same literal; the CalculateTaxPlugin queries by SchemaConstants.TaxRate.MinnesotaStateName which is 'MN'." languagecode="1033" />
           </Descriptions>
         </attribute>
         <attribute PhysicalName="eb_zip">

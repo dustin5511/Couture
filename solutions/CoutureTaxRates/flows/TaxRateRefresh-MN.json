@@ -48,8 +48,8 @@
     },
     "Compose_StateCode": {
       "type": "Compose",
-      "inputs": "Minnesota",
-      "_comment": "Full state name (not 'MN') because the CalculateTaxPlugin queries eb_taxrate by full name. eb_state column is sized to 50 to fit.",
+      "inputs": "MN",
+      "_comment": "2-letter state code that matches the value stored on eb_taxrate.eb_state and the SchemaConstants.TaxRate.MinnesotaStateName literal the plugin queries by.",
       "runAfter": { "Compose_FileName": ["Succeeded"] }
     },
     "HTTP_-_Download_rate_file": {

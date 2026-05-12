@@ -63,8 +63,8 @@ Three custom columns plus the system-managed primary name and key:
 | Logical name    | Display name | Type             | Notes                                                                   |
 | --------------- | ------------ | ---------------- | ----------------------------------------------------------------------- |
 | `eb_taxrateid`  | Tax Rate     | Uniqueidentifier | Primary key (system)                                                    |
-| `eb_name`       | Name         | Text (60)        | Primary name, e.g. `Minnesota-553371234`                                |
-| `eb_state`      | State        | Text (50)        | **Part of alternate key**, full state name (e.g. `Minnesota`).         |
+| `eb_name`       | Name         | Text (60)        | Primary name, e.g. `MN-553371234`                                       |
+| `eb_state`      | State        | Text (50)        | **Part of alternate key**, 2-letter state code (e.g. `MN`).            |
 | `eb_zip`        | ZIP          | Text (10)        | **Part of alternate key**, 9-digit ZIP with no dashes (`553371234`).   |
 | `eb_rate`       | Rate         | Decimal (6 dp)   | Combined sales-tax rate as a **fraction** (e.g. `0.081250` = 8.125%).  |
 
