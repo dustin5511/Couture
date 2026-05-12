@@ -12,6 +12,7 @@ namespace Couture.Plugins.MultipleQuotes.Constants
             public const string QuoteDetail = "quotedetail";
             public const string Opportunity = "opportunity";
             public const string OpportunityClose = "opportunityclose";
+            public const string TaxRate = "eb_taxrate";
         }
 
         internal static class Quote
@@ -22,6 +23,23 @@ namespace Couture.Plugins.MultipleQuotes.Constants
             public const string StateCode = "statecode";
             public const string StatusCode = "statuscode";
             public const string Name = "name";
+
+            // Custom money totals populated by QuoteTotalsRollupPlugin from
+            // the quote's line items. FOB total never includes tax; delivered
+            // totals include their matching tax bucket when delivery
+            // preference allows.
+            public const string FobTotal = "eb_fobtotal";
+            public const string DeliveredTotalTrailer = "eb_totaldeliveredtrailer";
+            public const string DeliveredTotalStraight = "eb_totaldeliveredstraight";
+            public const string TaxTotalTrailer = "eb_taxtotaltrailer";
+            public const string TaxTotalStraight = "eb_taxtotalstraight";
+
+            /// Tax rate applied to this quote, stored as a **percentage**
+            /// (e.g. 8.125 for 8.125%). Source rate from eb_taxrate.eb_rate
+            /// is a fraction (0.081250); the plugin multiplies by 100 before
+            /// writing here so the Word template can show "{value}%"
+            /// without any formula in the content control.
+            public const string AppliedTaxRatePercent = "eb_taxratepercent";
         }
 
         internal static class Opportunity
@@ -43,6 +61,10 @@ namespace Couture.Plugins.MultipleQuotes.Constants
             public const string UnloadTime = "eb_unloadtime";
             public const string TrailerRatePerTon = "eb_trailerrateton";
             public const string StraightTruckRatePerTon = "eb_straighttruckrateton";
+
+            // Inputs gating quote creation and feeding the tax lookup.
+            public const string JobsiteZip = "eb_jobsitezip";
+            public const string DeliveryPreference = "eb_deliverypreference";
         }
 
         internal static class QuoteDetail
@@ -51,9 +73,47 @@ namespace Couture.Plugins.MultipleQuotes.Constants
             public const string QuoteId = "quoteid";
             public const string ProductId = "productid";
             public const string PricePerUnit = "priceperunit";
+            public const string Quantity = "quantity";
             public const string IsIncomingMaterial = "eb_isincomingmaterial";
             public const string DeliveredPriceTrailer = "eb_deliveredpricetrailer";
             public const string DeliveredPriceStraight = "eb_deliveredpricestraight";
+
+            // Per-line tax in each scenario. Different because tax applies
+            // to the full delivered price (which includes freight) and the
+            // trailer and straight-truck freight components differ.
+            //   eb_taxamounttrailer  = deliveredpricetrailer  * qty * rate
+            //   eb_taxamountstraight = deliveredpricestraight * qty * rate
+            public const string TaxAmountTrailer = "eb_taxamounttrailer";
+            public const string TaxAmountStraight = "eb_taxamountstraight";
+        }
+
+        internal static class TaxRate
+        {
+            public const string Id = "eb_taxrateid";
+            public const string Name = "eb_name";
+            public const string State = "eb_state";
+            public const string Zip = "eb_zip";
+
+            /// Combined sales tax rate for the (state, ZIP), expressed as a
+            /// fraction (e.g. 0.06875 for 6.875%). The MN refresh flow
+            /// writes this column; the CalculateTaxPlugin reads it.
+            public const string Rate = "eb_rate";
+            public const string EffectiveDate = "eb_effectivedate";
+
+            /// State name stored on each eb_taxrate row. The MN refresh flow
+            /// writes the full state name (not the 2-letter code) so the
+            /// lookup uses the same literal.
+            public const string MinnesotaStateName = "Minnesota";
+        }
+
+        /// Option-set values for Opportunity.eb_deliverypreference.
+        /// FOB = customer picks up; Delivery = we deliver; FobAndDelivery =
+        /// the printed quote shows both pricing scenarios.
+        internal static class DeliveryPreference
+        {
+            public const int FOB = 1;
+            public const int Delivery = 2;
+            public const int FobAndDelivery = 3;
         }
 
         internal static class Freight

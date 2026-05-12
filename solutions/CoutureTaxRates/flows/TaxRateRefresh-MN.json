@@ -48,7 +48,8 @@
     },
     "Compose_StateCode": {
       "type": "Compose",
-      "inputs": "MN",
+      "inputs": "Minnesota",
+      "_comment": "Full state name (not 'MN') because the CalculateTaxPlugin queries eb_taxrate by full name. eb_state column is sized to 50 to fit.",
       "runAfter": { "Compose_FileName": ["Succeeded"] }
     },
     "HTTP_-_Download_rate_file": {
@@ -107,17 +108,10 @@
       "actions": {
         "Compose_parsed_row": {
           "type": "Compose",
+          "_comment": "eb_taxrate stores rate as a fraction (e.g. 0.081250 = 8.125%) — write the spreadsheet's Combined Rate column straight through, no scaling.",
           "inputs": {
-            "zip":           "@trim(string(items('Apply_to_each_row')?['ZIP Code']))",
-            "city":          "@trim(string(items('Apply_to_each_row')?['City']))",
-            "county":        "@trim(string(items('Apply_to_each_row')?['County']))",
-            "stateRate":     "@if(empty(items('Apply_to_each_row')?['State Rate']), 0, float(items('Apply_to_each_row')?['State Rate']))",
-            "cityRate":      "@if(empty(items('Apply_to_each_row')?['City Rate']), 0, float(items('Apply_to_each_row')?['City Rate']))",
-            "countyRate":    "@if(empty(items('Apply_to_each_row')?['County Rate']), 0, float(items('Apply_to_each_row')?['County Rate']))",
-            "transitRate":   "@if(empty(items('Apply_to_each_row')?['Transit Rate']), 0, float(items('Apply_to_each_row')?['Transit Rate']))",
-            "specialRate":   "@if(empty(items('Apply_to_each_row')?['Special Rate']), 0, float(items('Apply_to_each_row')?['Special Rate']))",
-            "combinedRate":  "@if(empty(items('Apply_to_each_row')?['Combined Rate']), 0, float(items('Apply_to_each_row')?['Combined Rate']))",
-            "effectiveDate": "@formatDateTime(items('Apply_to_each_row')?['Effective Date'], 'yyyy-MM-dd')"
+            "zip":  "@trim(string(items('Apply_to_each_row')?['ZIP Code']))",
+            "rate": "@if(empty(items('Apply_to_each_row')?['Combined Rate']), 0, float(items('Apply_to_each_row')?['Combined Rate']))"
           }
         },
         "Upsert_tax_rate": {
@@ -130,21 +124,11 @@
             },
             "parameters": {
               "entityName": "eb_taxrates",
-              "recordId": "@concat('eb_state=''', outputs('Compose_StateCode'), ''',eb_zip=''', outputs('Compose_parsed_row')?['zip'], '''')",
-              "item/eb_name":            "@concat(outputs('Compose_StateCode'), '-', outputs('Compose_parsed_row')?['zip'])",
-              "item/eb_state":           "@outputs('Compose_StateCode')",
-              "item/eb_zip":             "@outputs('Compose_parsed_row')?['zip']",
-              "item/eb_city":            "@outputs('Compose_parsed_row')?['city']",
-              "item/eb_county":          "@outputs('Compose_parsed_row')?['county']",
-              "item/eb_staterate":       "@outputs('Compose_parsed_row')?['stateRate']",
-              "item/eb_cityrate":        "@outputs('Compose_parsed_row')?['cityRate']",
-              "item/eb_countyrate":      "@outputs('Compose_parsed_row')?['countyRate']",
-              "item/eb_transitrate":     "@outputs('Compose_parsed_row')?['transitRate']",
-              "item/eb_specialrate":     "@outputs('Compose_parsed_row')?['specialRate']",
-              "item/eb_combinedrate":    "@outputs('Compose_parsed_row')?['combinedRate']",
-              "item/eb_effectivedate":   "@outputs('Compose_parsed_row')?['effectiveDate']",
-              "item/eb_lastrefreshedon": "@utcNow()",
-              "item/eb_sourceurl":       "@outputs('Compose_SourceUrl')"
+              "recordId":      "@concat('eb_state=''', outputs('Compose_StateCode'), ''',eb_zip=''', outputs('Compose_parsed_row')?['zip'], '''')",
+              "item/eb_name":  "@concat(outputs('Compose_StateCode'), '-', outputs('Compose_parsed_row')?['zip'])",
+              "item/eb_state": "@outputs('Compose_StateCode')",
+              "item/eb_zip":   "@outputs('Compose_parsed_row')?['zip']",
+              "item/eb_rate":  "@outputs('Compose_parsed_row')?['rate']"
             },
             "authentication": "@parameters('$authentication')"
           },

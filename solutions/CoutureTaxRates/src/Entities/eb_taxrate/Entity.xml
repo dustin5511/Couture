@@ -59,12 +59,11 @@
           <IsPrimaryName>1</IsPrimaryName>
           <Length>60</Length>
           <Format>text</Format>
-          <ImeMode>auto</ImeMode>
           <displaynames>
             <displayname description="Name" languagecode="1033" />
           </displaynames>
           <Descriptions>
-            <Description description="Display name for the row (e.g. MN-55337)." languagecode="1033" />
+            <Description description="Display name for the row (e.g. Minnesota-553371234)." languagecode="1033" />
           </Descriptions>
         </attribute>
         <attribute PhysicalName="eb_state">
@@ -83,13 +82,13 @@
           <IsCustomizable>1</IsCustomizable>
           <IsRenameable>1</IsRenameable>
           <CanModifyAdditionalSettings>1</CanModifyAdditionalSettings>
-          <Length>2</Length>
+          <Length>50</Length>
           <Format>text</Format>
           <displaynames>
             <displayname description="State" languagecode="1033" />
           </displaynames>
           <Descriptions>
-            <Description description="ISO 2-letter US state code (e.g. MN, WI). Part of the (state, ZIP) alternate key." languagecode="1033" />
+            <Description description="Full state name (e.g. 'Minnesota'). Part of the (state, ZIP) alternate key. The refresh flow writes the full name; the CalculateTaxPlugin queries by that same literal." languagecode="1033" />
           </Descriptions>
         </attribute>
         <attribute PhysicalName="eb_zip">
@@ -114,63 +113,13 @@
             <displayname description="ZIP" languagecode="1033" />
           </displaynames>
           <Descriptions>
-            <Description description="US ZIP or ZIP+4 code. Part of the (state, ZIP) alternate key." languagecode="1033" />
+            <Description description="Full 9-digit US ZIP, no dashes (e.g. '553371234'). Part of the (state, ZIP) alternate key. The plugin strips non-digits from the opportunity's eb_jobsitezip and matches with BeginsWith." languagecode="1033" />
           </Descriptions>
         </attribute>
-        <attribute PhysicalName="eb_city">
-          <Type>nvarchar</Type>
-          <Name>eb_city</Name>
-          <LogicalName>eb_city</LogicalName>
-          <RequiredLevel>none</RequiredLevel>
-          <ImeMode>auto</ImeMode>
-          <ValidForUpdateApi>1</ValidForUpdateApi>
-          <ValidForReadApi>1</ValidForReadApi>
-          <ValidForCreateApi>1</ValidForCreateApi>
-          <IsCustomField>1</IsCustomField>
-          <IsAuditEnabled>1</IsAuditEnabled>
-          <IsSecured>0</IsSecured>
-          <IntroducedVersion>1.0.0.0</IntroducedVersion>
-          <IsCustomizable>1</IsCustomizable>
-          <IsRenameable>1</IsRenameable>
-          <CanModifyAdditionalSettings>1</CanModifyAdditionalSettings>
-          <Length>100</Length>
-          <Format>text</Format>
-          <displaynames>
-            <displayname description="City" languagecode="1033" />
-          </displaynames>
-          <Descriptions>
-            <Description description="City associated with the ZIP code, as published by the source." languagecode="1033" />
-          </Descriptions>
-        </attribute>
-        <attribute PhysicalName="eb_county">
-          <Type>nvarchar</Type>
-          <Name>eb_county</Name>
-          <LogicalName>eb_county</LogicalName>
-          <RequiredLevel>none</RequiredLevel>
-          <ImeMode>auto</ImeMode>
-          <ValidForUpdateApi>1</ValidForUpdateApi>
-          <ValidForReadApi>1</ValidForReadApi>
-          <ValidForCreateApi>1</ValidForCreateApi>
-          <IsCustomField>1</IsCustomField>
-          <IsAuditEnabled>1</IsAuditEnabled>
-          <IsSecured>0</IsSecured>
-          <IntroducedVersion>1.0.0.0</IntroducedVersion>
-          <IsCustomizable>1</IsCustomizable>
-          <IsRenameable>1</IsRenameable>
-          <CanModifyAdditionalSettings>1</CanModifyAdditionalSettings>
-          <Length>100</Length>
-          <Format>text</Format>
-          <displaynames>
-            <displayname description="County" languagecode="1033" />
-          </displaynames>
-          <Descriptions>
-            <Description description="County associated with the ZIP code." languagecode="1033" />
-          </Descriptions>
-        </attribute>
-        <attribute PhysicalName="eb_staterate">
+        <attribute PhysicalName="eb_rate">
           <Type>decimal</Type>
-          <Name>eb_staterate</Name>
-          <LogicalName>eb_staterate</LogicalName>
+          <Name>eb_rate</Name>
+          <LogicalName>eb_rate</LogicalName>
           <RequiredLevel>none</RequiredLevel>
           <ValidForUpdateApi>1</ValidForUpdateApi>
           <ValidForReadApi>1</ValidForReadApi>
@@ -187,215 +136,10 @@
           <MaxValue>1</MaxValue>
           <ImeMode>disabled</ImeMode>
           <displaynames>
-            <displayname description="State Rate" languagecode="1033" />
+            <displayname description="Rate" languagecode="1033" />
           </displaynames>
           <Descriptions>
-            <Description description="State portion of the sales tax rate, expressed as a fraction (e.g. 0.068750 = 6.875%)." languagecode="1033" />
-          </Descriptions>
-        </attribute>
-        <attribute PhysicalName="eb_cityrate">
-          <Type>decimal</Type>
-          <Name>eb_cityrate</Name>
-          <LogicalName>eb_cityrate</LogicalName>
-          <RequiredLevel>none</RequiredLevel>
-          <ValidForUpdateApi>1</ValidForUpdateApi>
-          <ValidForReadApi>1</ValidForReadApi>
-          <ValidForCreateApi>1</ValidForCreateApi>
-          <IsCustomField>1</IsCustomField>
-          <IsAuditEnabled>1</IsAuditEnabled>
-          <IsSecured>0</IsSecured>
-          <IntroducedVersion>1.0.0.0</IntroducedVersion>
-          <IsCustomizable>1</IsCustomizable>
-          <IsRenameable>1</IsRenameable>
-          <CanModifyAdditionalSettings>1</CanModifyAdditionalSettings>
-          <Precision>6</Precision>
-          <MinValue>0</MinValue>
-          <MaxValue>1</MaxValue>
-          <ImeMode>disabled</ImeMode>
-          <displaynames>
-            <displayname description="City Rate" languagecode="1033" />
-          </displaynames>
-          <Descriptions>
-            <Description description="City portion of the sales tax rate, expressed as a fraction." languagecode="1033" />
-          </Descriptions>
-        </attribute>
-        <attribute PhysicalName="eb_countyrate">
-          <Type>decimal</Type>
-          <Name>eb_countyrate</Name>
-          <LogicalName>eb_countyrate</LogicalName>
-          <RequiredLevel>none</RequiredLevel>
-          <ValidForUpdateApi>1</ValidForUpdateApi>
-          <ValidForReadApi>1</ValidForReadApi>
-          <ValidForCreateApi>1</ValidForCreateApi>
-          <IsCustomField>1</IsCustomField>
-          <IsAuditEnabled>1</IsAuditEnabled>
-          <IsSecured>0</IsSecured>
-          <IntroducedVersion>1.0.0.0</IntroducedVersion>
-          <IsCustomizable>1</IsCustomizable>
-          <IsRenameable>1</IsRenameable>
-          <CanModifyAdditionalSettings>1</CanModifyAdditionalSettings>
-          <Precision>6</Precision>
-          <MinValue>0</MinValue>
-          <MaxValue>1</MaxValue>
-          <ImeMode>disabled</ImeMode>
-          <displaynames>
-            <displayname description="County Rate" languagecode="1033" />
-          </displaynames>
-          <Descriptions>
-            <Description description="County portion of the sales tax rate, expressed as a fraction." languagecode="1033" />
-          </Descriptions>
-        </attribute>
-        <attribute PhysicalName="eb_transitrate">
-          <Type>decimal</Type>
-          <Name>eb_transitrate</Name>
-          <LogicalName>eb_transitrate</LogicalName>
-          <RequiredLevel>none</RequiredLevel>
-          <ValidForUpdateApi>1</ValidForUpdateApi>
-          <ValidForReadApi>1</ValidForReadApi>
-          <ValidForCreateApi>1</ValidForCreateApi>
-          <IsCustomField>1</IsCustomField>
-          <IsAuditEnabled>1</IsAuditEnabled>
-          <IsSecured>0</IsSecured>
-          <IntroducedVersion>1.0.0.0</IntroducedVersion>
-          <IsCustomizable>1</IsCustomizable>
-          <IsRenameable>1</IsRenameable>
-          <CanModifyAdditionalSettings>1</CanModifyAdditionalSettings>
-          <Precision>6</Precision>
-          <MinValue>0</MinValue>
-          <MaxValue>1</MaxValue>
-          <ImeMode>disabled</ImeMode>
-          <displaynames>
-            <displayname description="Transit Rate" languagecode="1033" />
-          </displaynames>
-          <Descriptions>
-            <Description description="Transit district portion of the sales tax rate, expressed as a fraction." languagecode="1033" />
-          </Descriptions>
-        </attribute>
-        <attribute PhysicalName="eb_specialrate">
-          <Type>decimal</Type>
-          <Name>eb_specialrate</Name>
-          <LogicalName>eb_specialrate</LogicalName>
-          <RequiredLevel>none</RequiredLevel>
-          <ValidForUpdateApi>1</ValidForUpdateApi>
-          <ValidForReadApi>1</ValidForReadApi>
-          <ValidForCreateApi>1</ValidForCreateApi>
-          <IsCustomField>1</IsCustomField>
-          <IsAuditEnabled>1</IsAuditEnabled>
-          <IsSecured>0</IsSecured>
-          <IntroducedVersion>1.0.0.0</IntroducedVersion>
-          <IsCustomizable>1</IsCustomizable>
-          <IsRenameable>1</IsRenameable>
-          <CanModifyAdditionalSettings>1</CanModifyAdditionalSettings>
-          <Precision>6</Precision>
-          <MinValue>0</MinValue>
-          <MaxValue>1</MaxValue>
-          <ImeMode>disabled</ImeMode>
-          <displaynames>
-            <displayname description="Special District Rate" languagecode="1033" />
-          </displaynames>
-          <Descriptions>
-            <Description description="Special district (e.g. stadium, tourism) portion of the sales tax rate, expressed as a fraction." languagecode="1033" />
-          </Descriptions>
-        </attribute>
-        <attribute PhysicalName="eb_combinedrate">
-          <Type>decimal</Type>
-          <Name>eb_combinedrate</Name>
-          <LogicalName>eb_combinedrate</LogicalName>
-          <RequiredLevel>none</RequiredLevel>
-          <ValidForUpdateApi>1</ValidForUpdateApi>
-          <ValidForReadApi>1</ValidForReadApi>
-          <ValidForCreateApi>1</ValidForCreateApi>
-          <IsCustomField>1</IsCustomField>
-          <IsAuditEnabled>1</IsAuditEnabled>
-          <IsSecured>0</IsSecured>
-          <IntroducedVersion>1.0.0.0</IntroducedVersion>
-          <IsCustomizable>1</IsCustomizable>
-          <IsRenameable>1</IsRenameable>
-          <CanModifyAdditionalSettings>1</CanModifyAdditionalSettings>
-          <Precision>6</Precision>
-          <MinValue>0</MinValue>
-          <MaxValue>1</MaxValue>
-          <ImeMode>disabled</ImeMode>
-          <displaynames>
-            <displayname description="Combined Rate" languagecode="1033" />
-          </displaynames>
-          <Descriptions>
-            <Description description="Sum of all rate components (state + city + county + transit + special), expressed as a fraction." languagecode="1033" />
-          </Descriptions>
-        </attribute>
-        <attribute PhysicalName="eb_effectivedate">
-          <Type>datetime</Type>
-          <Name>eb_effectivedate</Name>
-          <LogicalName>eb_effectivedate</LogicalName>
-          <RequiredLevel>none</RequiredLevel>
-          <ValidForUpdateApi>1</ValidForUpdateApi>
-          <ValidForReadApi>1</ValidForReadApi>
-          <ValidForCreateApi>1</ValidForCreateApi>
-          <IsCustomField>1</IsCustomField>
-          <IsAuditEnabled>1</IsAuditEnabled>
-          <IsSecured>0</IsSecured>
-          <IntroducedVersion>1.0.0.0</IntroducedVersion>
-          <IsCustomizable>1</IsCustomizable>
-          <IsRenameable>1</IsRenameable>
-          <CanModifyAdditionalSettings>1</CanModifyAdditionalSettings>
-          <Format>dateonly</Format>
-          <DateTimeBehavior>DateOnly</DateTimeBehavior>
-          <ImeMode>disabled</ImeMode>
-          <displaynames>
-            <displayname description="Effective Date" languagecode="1033" />
-          </displaynames>
-          <Descriptions>
-            <Description description="Date this rate became effective, per the source publication." languagecode="1033" />
-          </Descriptions>
-        </attribute>
-        <attribute PhysicalName="eb_lastrefreshedon">
-          <Type>datetime</Type>
-          <Name>eb_lastrefreshedon</Name>
-          <LogicalName>eb_lastrefreshedon</LogicalName>
-          <RequiredLevel>none</RequiredLevel>
-          <ValidForUpdateApi>1</ValidForUpdateApi>
-          <ValidForReadApi>1</ValidForReadApi>
-          <ValidForCreateApi>1</ValidForCreateApi>
-          <IsCustomField>1</IsCustomField>
-          <IsAuditEnabled>1</IsAuditEnabled>
-          <IsSecured>0</IsSecured>
-          <IntroducedVersion>1.0.0.0</IntroducedVersion>
-          <IsCustomizable>1</IsCustomizable>
-          <IsRenameable>1</IsRenameable>
-          <CanModifyAdditionalSettings>1</CanModifyAdditionalSettings>
-          <Format>datetime</Format>
-          <DateTimeBehavior>UserLocal</DateTimeBehavior>
-          <ImeMode>disabled</ImeMode>
-          <displaynames>
-            <displayname description="Last Refreshed On" languagecode="1033" />
-          </displaynames>
-          <Descriptions>
-            <Description description="UTC timestamp set by the refresh flow on each upsert." languagecode="1033" />
-          </Descriptions>
-        </attribute>
-        <attribute PhysicalName="eb_sourceurl">
-          <Type>nvarchar</Type>
-          <Name>eb_sourceurl</Name>
-          <LogicalName>eb_sourceurl</LogicalName>
-          <RequiredLevel>none</RequiredLevel>
-          <ImeMode>auto</ImeMode>
-          <ValidForUpdateApi>1</ValidForUpdateApi>
-          <ValidForReadApi>1</ValidForReadApi>
-          <ValidForCreateApi>1</ValidForCreateApi>
-          <IsCustomField>1</IsCustomField>
-          <IsAuditEnabled>1</IsAuditEnabled>
-          <IsSecured>0</IsSecured>
-          <IntroducedVersion>1.0.0.0</IntroducedVersion>
-          <IsCustomizable>1</IsCustomizable>
-          <IsRenameable>1</IsRenameable>
-          <CanModifyAdditionalSettings>1</CanModifyAdditionalSettings>
-          <Length>500</Length>
-          <Format>url</Format>
-          <displaynames>
-            <displayname description="Source URL" languagecode="1033" />
-          </displaynames>
-          <Descriptions>
-            <Description description="URL the row was downloaded from on the last refresh." languagecode="1033" />
+            <Description description="Combined sales tax rate for (state, ZIP), expressed as a fraction (e.g. 0.06875 = 6.875%)." languagecode="1033" />
           </Descriptions>
         </attribute>
       </attributes>
@@ -437,10 +181,7 @@
               <attribute name="eb_name" />
               <attribute name="eb_state" />
               <attribute name="eb_zip" />
-              <attribute name="eb_city" />
-              <attribute name="eb_combinedrate" />
-              <attribute name="eb_effectivedate" />
-              <attribute name="eb_lastrefreshedon" />
+              <attribute name="eb_rate" />
               <attribute name="eb_taxrateid" />
               <order attribute="eb_state" descending="false" />
               <order attribute="eb_zip" descending="false" />
@@ -454,12 +195,9 @@
           <grid name="resultset" object="10000" jump="eb_name" select="1" icon="1" preview="1">
             <row name="result" id="eb_taxrateid">
               <cell name="eb_name" width="200" />
-              <cell name="eb_state" width="80" />
-              <cell name="eb_zip" width="100" />
-              <cell name="eb_city" width="200" />
-              <cell name="eb_combinedrate" width="120" />
-              <cell name="eb_effectivedate" width="120" />
-              <cell name="eb_lastrefreshedon" width="160" />
+              <cell name="eb_state" width="120" />
+              <cell name="eb_zip" width="120" />
+              <cell name="eb_rate" width="120" />
             </row>
           </grid>
         </layoutxml>

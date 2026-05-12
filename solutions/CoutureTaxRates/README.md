@@ -58,29 +58,26 @@ solutions/CoutureTaxRates/
 
 ## What the table looks like
 
-| Logical name           | Display name          | Type            | Notes                                              |
-| ---------------------- | --------------------- | --------------- | -------------------------------------------------- |
-| `eb_taxrateid`         | Tax Rate              | Uniqueidentifier| Primary key (auto)                                 |
-| `eb_name`              | Name                  | Text (60)       | Primary name field, e.g. `MN-55337`                |
-| `eb_state`             | State                 | Text (2)        | **Part of alternate key**, ISO 2-letter (MN, WI…)  |
-| `eb_zip`               | ZIP                   | Text (10)       | **Part of alternate key**, supports ZIP+4          |
-| `eb_city`              | City                  | Text (100)      |                                                    |
-| `eb_county`            | County                | Text (100)      |                                                    |
-| `eb_staterate`         | State Rate            | Decimal (6 dp)  | e.g. `0.068750` for 6.875%                         |
-| `eb_cityrate`          | City Rate             | Decimal (6 dp)  |                                                    |
-| `eb_countyrate`        | County Rate           | Decimal (6 dp)  |                                                    |
-| `eb_transitrate`       | Transit Rate          | Decimal (6 dp)  |                                                    |
-| `eb_specialrate`       | Special District Rate | Decimal (6 dp)  |                                                    |
-| `eb_combinedrate`      | Combined Rate         | Decimal (6 dp)  | Sum of all of the above                            |
-| `eb_effectivedate`     | Effective Date        | Date only       | From the source spreadsheet                        |
-| `eb_lastrefreshedon`   | Last Refreshed On     | DateTime (User local) | Set by the flow on each upsert                |
-| `eb_sourceurl`         | Source URL            | Text (500, URL) | The URL the row was downloaded from                |
+Three custom columns plus the system-managed primary name and key:
+
+| Logical name    | Display name | Type             | Notes                                                                   |
+| --------------- | ------------ | ---------------- | ----------------------------------------------------------------------- |
+| `eb_taxrateid`  | Tax Rate     | Uniqueidentifier | Primary key (system)                                                    |
+| `eb_name`       | Name         | Text (60)        | Primary name, e.g. `Minnesota-553371234`                                |
+| `eb_state`      | State        | Text (50)        | **Part of alternate key**, full state name (e.g. `Minnesota`).         |
+| `eb_zip`        | ZIP          | Text (10)        | **Part of alternate key**, 9-digit ZIP with no dashes (`553371234`).   |
+| `eb_rate`       | Rate         | Decimal (6 dp)   | Combined sales-tax rate as a **fraction** (e.g. `0.081250` = 8.125%).  |
 
 **Alternate key:** `eb_taxrate_state_zip` over `(eb_state, eb_zip)`. The
 refresh flow uses this for upserts so a monthly refresh is idempotent.
 
-**Default view ("Active Tax Rates"):** shows Name / State / ZIP / City /
-Combined Rate / Effective Date / Last Refreshed On, sorted by State then ZIP.
+**Default view ("Active Tax Rates"):** shows Name / State / ZIP / Rate,
+sorted by State then ZIP.
+
+The plugin (`CalculateTaxPlugin`) reads only `eb_rate` for the matching
+row. It uses the rate as a fraction directly: `tax = deliveredPrice × qty
+× rate`. If you ever change the storage to a percentage, divide by 100 in
+both the plugin and the refresh flow.
 
 ---
 
