@@ -53,6 +53,13 @@ namespace Couture.Plugins.MultipleQuotes.Constants
             /// writing here so the Word template can show "{value}%"
             /// without any formula in the content control.
             public const string AppliedTaxRatePercent = "eb_taxratepercent";
+
+            /// Per-quote copy of the project's eb_deliverypreference.
+            /// Seeded from Opportunity at quote Create and then editable
+            /// on the quote itself; all downstream tax / delivered-total
+            /// calculations read from this field so each quote under a
+            /// project can model a different scenario.
+            public const string DeliveryPreference = "eb_deliverypreference";
         }
 
         internal static class Opportunity

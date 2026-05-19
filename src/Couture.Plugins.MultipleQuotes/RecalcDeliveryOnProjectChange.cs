@@ -340,17 +340,9 @@ namespace Couture.Plugins.MultipleQuotes
             var quote = ctx.Service.Retrieve(
                 SchemaConstants.Entities.Quote,
                 quoteId,
-                new ColumnSet(SchemaConstants.Quote.OpportunityId));
-            var oppRef = quote.GetAttributeValue<EntityReference>(
-                SchemaConstants.Quote.OpportunityId);
-            if (oppRef == null) return false;
-
-            var opp = ctx.Service.Retrieve(
-                SchemaConstants.Entities.Opportunity,
-                oppRef.Id,
-                new ColumnSet(SchemaConstants.Opportunity.DeliveryPreference));
-            var preference = opp.GetAttributeValue<OptionSetValue>(
-                SchemaConstants.Opportunity.DeliveryPreference);
+                new ColumnSet(SchemaConstants.Quote.DeliveryPreference));
+            var preference = quote.GetAttributeValue<OptionSetValue>(
+                SchemaConstants.Quote.DeliveryPreference);
             if (preference == null) return false;
 
             return preference.Value == SchemaConstants.DeliveryPreference.Delivery

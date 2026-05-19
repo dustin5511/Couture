@@ -19,9 +19,13 @@ namespace Couture.Plugins.MultipleQuotes
     ///                          (drives tax-rate lookup and which totals
     ///                          tax applies to).
     ///
-    /// On success the plugin also stamps eb_taxratepercent on the target
-    /// row by looking up the rate from eb_taxrate, so the rate is
-    /// visible on the printed quote even before any line items exist.
+    /// On success the plugin also:
+    ///   • copies eb_deliverypreference from the parent Project onto the
+    ///     new Quote (seed only — the user can change it on the quote
+    ///     afterward and downstream pricing reads from the quote field), and
+    ///   • stamps eb_taxratepercent on the target row by looking up the
+    ///     rate from eb_taxrate, so the rate is visible on the printed
+    ///     quote even before any line items exist.
     ///
     /// Register on:
     ///   Message=Create, PrimaryEntity=quote, Stage=PreValidation (10),
@@ -121,6 +125,19 @@ namespace Couture.Plugins.MultipleQuotes
             }
 
             ctx.Tracing.Trace("Validation PASSED – all required fields populated.");
+
+            // ── Seed delivery preference on the new quote ───────────────
+            // Pre-Validation runs before the platform writes the row, so
+            // mutating the Target persists in the initial insert. The
+            // user is free to change this on the quote afterward; every
+            // downstream calc reads from the quote, not the project.
+            if (!target.Contains(SchemaConstants.Quote.DeliveryPreference))
+            {
+                target[SchemaConstants.Quote.DeliveryPreference] =
+                    new OptionSetValue(deliveryPreference.Value);
+                ctx.Tracing.Trace("Seeded Quote.eb_deliverypreference = {0} from Project.",
+                    deliveryPreference.Value);
+            }
 
             // ── Stamp tax rate on the new quote ─────────────────────────
             // Pre-Validation runs before the platform writes the row, so
