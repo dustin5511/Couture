@@ -60,6 +60,16 @@ namespace Couture.Plugins.MultipleQuotes.Constants
             /// calculations read from this field so each quote under a
             /// project can model a different scenario.
             public const string DeliveryPreference = "eb_deliverypreference";
+
+            // Standard OOB Ship To address fields. Seeded at quote Create
+            // from the parent Project's eb_jobsite* columns so the printed
+            // quote shows the delivery address without any extra lookup.
+            public const string ShipToLine1 = "shipto_line1";
+            public const string ShipToLine2 = "shipto_line2";
+            public const string ShipToCity = "shipto_city";
+            public const string ShipToStateOrProvince = "shipto_stateorprovince";
+            public const string ShipToPostalCode = "shipto_postalcode";
+            public const string ShipToCountry = "shipto_country";
         }
 
         internal static class Opportunity
@@ -90,6 +100,15 @@ namespace Couture.Plugins.MultipleQuotes.Constants
             // Inputs gating quote creation and feeding the tax lookup.
             public const string JobsiteZip = "eb_jobsitezip";
             public const string DeliveryPreference = "eb_deliverypreference";
+
+            // Job-site address columns on the Project. Copied onto the
+            // standard shipto_* address fields of every Quote created
+            // under the Project (see ValidateFreightBeforeQuoteCreate).
+            public const string JobsiteStreet1 = "eb_jobsitestreet1";
+            public const string JobsiteStreet2 = "eb_jobsitestreet2";
+            public const string JobsiteCity = "eb_jobsitecity";
+            public const string JobsiteState = "eb_jobsitestate";
+            public const string JobsiteCountry = "eb_jobsitecountry";
         }
 
         internal static class QuoteDetail

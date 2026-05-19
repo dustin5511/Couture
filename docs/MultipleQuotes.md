@@ -28,6 +28,11 @@ quote-creation validation / tax calculation pipeline:
 | `new_activewonquotestotal`         | Money     | Populated by `OpportunityQuoteRollupPlugin`.                          |
 | `eb_jobsitezip`                    | Text (10) | Delivery ZIP. Required before a Quote can be created. Accepts 5-digit, 9-digit dashed (`55337-1234`), or 9-digit undashed (`553371234`); the plugin strips non-digits and uses `BeginsWith` against `eb_taxrate`. |
 | `eb_deliverypreference`            | Choice    | Values: `1 = FOB`, `2 = Delivery`, `3 = FOB and Delivery`. Required before a Quote can be created. |
+| `eb_jobsitestreet1`                | Text      | Copied onto Quote `shipto_line1` at quote Create.                     |
+| `eb_jobsitestreet2`                | Text      | Copied onto Quote `shipto_line2` at quote Create.                     |
+| `eb_jobsitecity`                   | Text      | Copied onto Quote `shipto_city` at quote Create.                      |
+| `eb_jobsitestate`                  | Text      | Copied onto Quote `shipto_stateorprovince` at quote Create.           |
+| `eb_jobsitecountry`                | Text      | Copied onto Quote `shipto_country` at quote Create.                   |
 
 ### Quote
 
@@ -130,6 +135,11 @@ On success the plugin also:
   project). Editing the quote's `eb_deliverypreference` fires
   `RecalcOnQuoteDeliveryPreferenceChange`, which re-triggers each line
   item's pricing/tax calc so the totals reflect the new preference.
+- Copies the Project's job-site address (`eb_jobsitestreet1/2`, city,
+  state, ZIP, country) onto the Quote's standard `shipto_*` columns
+  so the printed quote shows the delivery address without any extra
+  lookup. The seed skips any `shipto_*` field the user already typed
+  on the form before save, and skips any source column that's blank.
 - Looks up the current tax rate via `TaxRateService` and stamps
   `eb_taxratepercent` (as a percentage – e.g. `8.125`) directly on the
   target row before insert, so a freshly created Quote already shows
