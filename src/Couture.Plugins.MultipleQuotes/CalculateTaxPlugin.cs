@@ -7,7 +7,7 @@ using Microsoft.Xrm.Sdk.Query;
 namespace Couture.Plugins.MultipleQuotes
 {
     /// Populates the two per-line tax fields on a quote product based on
-    /// the parent Project's Delivery Preference and Jobsite ZIP:
+    /// the parent Quote's Delivery Preference and the Project's Jobsite ZIP:
     ///
     ///   FOB only (1)             → tax = 0 on both fields.
     ///   Delivery (2)             → tax = deliveredprice * qty * rate
@@ -73,7 +73,16 @@ namespace Couture.Plugins.MultipleQuotes
             var quote = ctx.Service.Retrieve(
                 SchemaConstants.Entities.Quote,
                 quoteRef.Id,
-                new ColumnSet(SchemaConstants.Quote.OpportunityId));
+                new ColumnSet(
+                    SchemaConstants.Quote.OpportunityId,
+                    SchemaConstants.Quote.DeliveryPreference));
+
+            // Delivery preference lives on the quote (seeded from the
+            // project at Create, then editable per-quote). The ZIP still
+            // comes from the project.
+            var preference = quote.GetAttributeValue<OptionSetValue>(
+                SchemaConstants.Quote.DeliveryPreference);
+            var preferenceValue = preference?.Value ?? -1;
 
             var oppRef = quote.GetAttributeValue<EntityReference>(
                 SchemaConstants.Quote.OpportunityId);
@@ -86,13 +95,7 @@ namespace Couture.Plugins.MultipleQuotes
             var opportunity = ctx.Service.Retrieve(
                 SchemaConstants.Entities.Opportunity,
                 oppRef.Id,
-                new ColumnSet(
-                    SchemaConstants.Opportunity.JobsiteZip,
-                    SchemaConstants.Opportunity.DeliveryPreference));
-
-            var preference = opportunity.GetAttributeValue<OptionSetValue>(
-                SchemaConstants.Opportunity.DeliveryPreference);
-            var preferenceValue = preference?.Value ?? -1;
+                new ColumnSet(SchemaConstants.Opportunity.JobsiteZip));
 
             var isIncoming = record.GetAttributeValue<bool>(
                 SchemaConstants.QuoteDetail.IsIncomingMaterial);

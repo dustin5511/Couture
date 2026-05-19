@@ -19,9 +19,17 @@ namespace Couture.Plugins.MultipleQuotes
     ///                          (drives tax-rate lookup and which totals
     ///                          tax applies to).
     ///
-    /// On success the plugin also stamps eb_taxratepercent on the target
-    /// row by looking up the rate from eb_taxrate, so the rate is
-    /// visible on the printed quote even before any line items exist.
+    /// On success the plugin also:
+    ///   • copies eb_deliverypreference from the parent Project onto the
+    ///     new Quote (seed only — the user can change it on the quote
+    ///     afterward and downstream pricing reads from the quote field),
+    ///   • copies the Project's job-site address (eb_jobsitestreet1/2,
+    ///     city, state, postal, country) onto the Quote's standard
+    ///     shipto_* fields so the printed quote shows the delivery
+    ///     address without any extra lookup, and
+    ///   • stamps eb_taxratepercent on the target row by looking up the
+    ///     rate from eb_taxrate, so the rate is visible on the printed
+    ///     quote even before any line items exist.
     ///
     /// Register on:
     ///   Message=Create, PrimaryEntity=quote, Stage=PreValidation (10),
@@ -67,7 +75,12 @@ namespace Couture.Plugins.MultipleQuotes
                     SchemaConstants.Opportunity.LoadTime,
                     SchemaConstants.Opportunity.UnloadTime,
                     SchemaConstants.Opportunity.JobsiteZip,
-                    SchemaConstants.Opportunity.DeliveryPreference));
+                    SchemaConstants.Opportunity.DeliveryPreference,
+                    SchemaConstants.Opportunity.JobsiteStreet1,
+                    SchemaConstants.Opportunity.JobsiteStreet2,
+                    SchemaConstants.Opportunity.JobsiteCity,
+                    SchemaConstants.Opportunity.JobsiteState,
+                    SchemaConstants.Opportunity.JobsiteCountry));
 
             var missing = new List<string>();
 
@@ -122,6 +135,39 @@ namespace Couture.Plugins.MultipleQuotes
 
             ctx.Tracing.Trace("Validation PASSED – all required fields populated.");
 
+            // ── Seed delivery preference on the new quote ───────────────
+            // Pre-Validation runs before the platform writes the row, so
+            // mutating the Target persists in the initial insert. The
+            // user is free to change this on the quote afterward; every
+            // downstream calc reads from the quote, not the project.
+            if (!target.Contains(SchemaConstants.Quote.DeliveryPreference))
+            {
+                target[SchemaConstants.Quote.DeliveryPreference] =
+                    new OptionSetValue(deliveryPreference.Value);
+                ctx.Tracing.Trace("Seeded Quote.eb_deliverypreference = {0} from Project.",
+                    deliveryPreference.Value);
+            }
+
+            // ── Seed Ship To address on the new quote ───────────────────
+            // Copy the Project's job-site address onto the Quote's
+            // standard shipto_* columns. Same Target-mutation trick as
+            // the preference above; the user can override any field on
+            // the quote afterward. ZIP is also written here so the
+            // shipto block is internally consistent even though the tax
+            // lookup still reads eb_jobsitezip off the Project.
+            SeedShipToField(target, SchemaConstants.Quote.ShipToLine1,
+                opp.GetAttributeValue<string>(SchemaConstants.Opportunity.JobsiteStreet1));
+            SeedShipToField(target, SchemaConstants.Quote.ShipToLine2,
+                opp.GetAttributeValue<string>(SchemaConstants.Opportunity.JobsiteStreet2));
+            SeedShipToField(target, SchemaConstants.Quote.ShipToCity,
+                opp.GetAttributeValue<string>(SchemaConstants.Opportunity.JobsiteCity));
+            SeedShipToField(target, SchemaConstants.Quote.ShipToStateOrProvince,
+                opp.GetAttributeValue<string>(SchemaConstants.Opportunity.JobsiteState));
+            SeedShipToField(target, SchemaConstants.Quote.ShipToPostalCode, jobsiteZip);
+            SeedShipToField(target, SchemaConstants.Quote.ShipToCountry,
+                opp.GetAttributeValue<string>(SchemaConstants.Opportunity.JobsiteCountry));
+            ctx.Tracing.Trace("Seeded shipto_* fields from Project job-site address.");
+
             // ── Stamp tax rate on the new quote ─────────────────────────
             // Pre-Validation runs before the platform writes the row, so
             // mutating the Target stores the value in the initial insert
@@ -144,6 +190,19 @@ namespace Couture.Plugins.MultipleQuotes
                     "No matching eb_taxrate row for ZIP '{0}' – leaving rate unset on the new quote.",
                     jobsiteZip);
             }
+        }
+
+        /// Writes `value` into `target[fieldName]` unless the user has
+        /// already supplied something for that field on the inbound
+        /// Quote – this keeps any manual ship-to override the user
+        /// typed into the form before save. Empty / whitespace project
+        /// values are skipped so we don't blank out a legitimate manual
+        /// entry with a missing job-site column.
+        private static void SeedShipToField(Entity target, string fieldName, string value)
+        {
+            if (target.Contains(fieldName)) return;
+            if (string.IsNullOrWhiteSpace(value)) return;
+            target[fieldName] = value;
         }
     }
 }

@@ -28,6 +28,11 @@ quote-creation validation / tax calculation pipeline:
 | `new_activewonquotestotal`         | Money     | Populated by `OpportunityQuoteRollupPlugin`.                          |
 | `eb_jobsitezip`                    | Text (10) | Delivery ZIP. Required before a Quote can be created. Accepts 5-digit, 9-digit dashed (`55337-1234`), or 9-digit undashed (`553371234`); the plugin strips non-digits and uses `BeginsWith` against `eb_taxrate`. |
 | `eb_deliverypreference`            | Choice    | Values: `1 = FOB`, `2 = Delivery`, `3 = FOB and Delivery`. Required before a Quote can be created. |
+| `eb_jobsitestreet1`                | Text      | Copied onto Quote `shipto_line1` at quote Create.                     |
+| `eb_jobsitestreet2`                | Text      | Copied onto Quote `shipto_line2` at quote Create.                     |
+| `eb_jobsitecity`                   | Text      | Copied onto Quote `shipto_city` at quote Create.                      |
+| `eb_jobsitestate`                  | Text      | Copied onto Quote `shipto_stateorprovince` at quote Create.           |
+| `eb_jobsitecountry`                | Text      | Copied onto Quote `shipto_country` at quote Create.                   |
 
 ### Quote
 
@@ -39,6 +44,7 @@ quote-creation validation / tax calculation pipeline:
 | `eb_taxtotaltrailer`               | Money            | Σ of per-line `eb_taxamounttrailer`.                                            |
 | `eb_taxtotalstraight`              | Money            | Σ of per-line `eb_taxamountstraight`.                                           |
 | `eb_taxratepercent`                | Decimal (4 dp)   | Tax rate applied to this quote, stored as a **percentage** (e.g. `8.125` for 8.125%). Source rate from `eb_taxrate.eb_rate` is a fraction; plugin multiplies by 100 before writing. Word template renders it as `{eb_taxratepercent}%`. |
+| `eb_deliverypreference`            | Choice           | Per-quote copy of the project's preference. Values: `1 = FOB`, `2 = Delivery`, `3 = FOB and Delivery`. Seeded from the parent Opportunity at quote Create; editable on the quote afterward. All downstream tax / delivered-total calculations read from this field, so each quote under a project can model a different scenario. |
 
 ### Quote Product (quotedetail)
 
@@ -94,6 +100,7 @@ All steps are **synchronous** and run as the calling user.
 | 11 | `CalculateTaxPlugin`                  | Create  | quotedetail    | PostOperation 50  | –     | –                                                                                                              | PostImage `PostImage`: priceperunit, quantity, eb_isincomingmaterial, quoteid, eb_deliveredpricetrailer, eb_deliveredpricestraight           |
 | 12 | `CalculateTaxPlugin`                  | Update  | quotedetail    | PostOperation 50  | –     | priceperunit, quantity, eb_isincomingmaterial, eb_deliveredpricetrailer, eb_deliveredpricestraight              | PostImage `PostImage`: priceperunit, quantity, eb_isincomingmaterial, quoteid, eb_deliveredpricetrailer, eb_deliveredpricestraight           |
 | 13 | `RecalcDeliveryOnProjectChange`       | Update  | opportunity    | PostOperation 40  | –     | eb_shippingrateperhour, eb_cycletime, eb_loadtime, eb_unloadtime                                               | PostImage `PostImage`: eb_shippingrateperhour, eb_cycletime, eb_loadtime, eb_unloadtime                                                      |
+| 14 | `RecalcOnQuoteDeliveryPreferenceChange` | Update | quote        | PostOperation 40  | –     | eb_deliverypreference                                                                                          | –                                                                                                                                            |
 
 Notes:
 
@@ -101,6 +108,7 @@ Notes:
 - `PopulateIncomingMaterialFlag` runs at **PreOperation (20)** with Execution Order 1 on `quotedetail` Create — it mutates the Target directly (no extra Update) so the platform's insert carries the correct flag, and `CalculateDeliveryPricingPlugin` at rank 2 sees it.
 - `CalculateDeliveryPricingPlugin` writes per-line delivered prices, extended amounts, **and** rolls up the five Quote-level totals (FOB, delivered trailer/straight, tax trailer/straight). The rollup includes the per-line tax fields written by `CalculateTaxPlugin` at rank 50 on subsequent passes.
 - `RecalcDeliveryOnProjectChange` cascades opportunity freight-input edits to every active quote underneath, then runs the same 5-field rollup so the quote-level totals stay consistent.
+- `RecalcOnQuoteDeliveryPreferenceChange` re-fires the line-level tax + rollup when the user edits `eb_deliverypreference` on a quote. It touches each child `quotedetail` by writing its current quantity back, which trips the filter attribute on the downstream pricing plugins so they re-read the (now updated) preference from the quote and produce new tax amounts and totals.
 
 ## 4. Behaviour summary
 
@@ -118,13 +126,27 @@ categories:
 The error surfaces on the form so the user can correct the Project record
 without leaving the page.
 
-On success the plugin also looks up the current tax rate via
-`TaxRateService` and stamps `eb_taxratepercent` (as a percentage – e.g.
-`8.125`) directly on the target row before insert, so a freshly created
-Quote already shows the applied rate even before any line items exist.
-`CalculateTaxPlugin` re-syncs this field whenever line tax is
-recalculated, which keeps it honest if the opportunity ZIP changes after
-the quote was created.
+On success the plugin also:
+
+- Copies `eb_deliverypreference` from the parent Project onto the new
+  Quote. From this point on every tax / delivered-total calculation
+  reads the preference from the **quote**, so the user can change it
+  per-quote (e.g. one FOB scenario, one Delivery scenario on the same
+  project). Editing the quote's `eb_deliverypreference` fires
+  `RecalcOnQuoteDeliveryPreferenceChange`, which re-triggers each line
+  item's pricing/tax calc so the totals reflect the new preference.
+- Copies the Project's job-site address (`eb_jobsitestreet1/2`, city,
+  state, ZIP, country) onto the Quote's standard `shipto_*` columns
+  so the printed quote shows the delivery address without any extra
+  lookup. The seed skips any `shipto_*` field the user already typed
+  on the form before save, and skips any source column that's blank.
+- Looks up the current tax rate via `TaxRateService` and stamps
+  `eb_taxratepercent` (as a percentage – e.g. `8.125`) directly on the
+  target row before insert, so a freshly created Quote already shows
+  the applied rate even before any line items exist.
+  `CalculateTaxPlugin` re-syncs this field whenever line tax is
+  recalculated, which keeps it honest if the opportunity ZIP changes
+  after the quote was created.
 
 ### Calculating tax on a quote line
 
