@@ -33,6 +33,7 @@ quote-creation validation / tax calculation pipeline:
 | `eb_jobsitecity`                   | Text      | Copied onto Quote `shipto_city` at quote Create.                      |
 | `eb_jobsitestate`                  | Text      | Copied onto Quote `shipto_stateorprovince` at quote Create.           |
 | `eb_jobsitecountry`                | Text      | Copied onto Quote `shipto_country` at quote Create.                   |
+| `eb_customerjobprojectnumber`      | Text      | Customer's internal job/project reference. Copied onto Quote `eb_customerjobprojectnumber` at quote Create. |
 
 ### Quote
 
@@ -45,6 +46,13 @@ quote-creation validation / tax calculation pipeline:
 | `eb_taxtotalstraight`              | Money            | Σ of per-line `eb_taxamountstraight`.                                           |
 | `eb_taxratepercent`                | Decimal (4 dp)   | Tax rate applied to this quote, stored as a **percentage** (e.g. `8.125` for 8.125%). Source rate from `eb_taxrate.eb_rate` is a fraction; plugin multiplies by 100 before writing. Word template renders it as `{eb_taxratepercent}%`. |
 | `eb_deliverypreference`            | Choice           | Per-quote copy of the project's preference. Values: `1 = FOB`, `2 = Delivery`, `3 = FOB and Delivery`. Seeded from the parent Opportunity at quote Create; editable on the quote afterward. All downstream tax / delivered-total calculations read from this field, so each quote under a project can model a different scenario. |
+| `eb_customerjobprojectnumber`      | Text             | Customer's internal job/project reference. Seeded from the parent Opportunity at quote Create. |
+| `eb_ownerfullname`                 | Text             | Denormalized from owning user's `fullname` at Create. Word Template XML mapper can't traverse `ownerid → systemuser`, so the contact details get stamped here. Create-only — not refreshed on Assign. |
+| `eb_owneremail`                    | Text             | Denormalized from owning user's `internalemailaddress` at Create.    |
+| `eb_ownerdirect`                   | Text             | Denormalized from owning user's `address1_telephone1` at Create.     |
+| `eb_ownermobile`                   | Text             | Denormalized from owning user's `mobilephone` at Create.             |
+| `eb_ownerfax`                      | Text             | Denormalized from owning user's `address1_fax` at Create.            |
+| `eb_ownertitle`                    | Text             | Denormalized from owning user's `jobtitle` at Create.                |
 
 ### Quote Product (quotedetail)
 
@@ -140,6 +148,17 @@ On success the plugin also:
   so the printed quote shows the delivery address without any extra
   lookup. The seed skips any `shipto_*` field the user already typed
   on the form before save, and skips any source column that's blank.
+- Copies `eb_customerjobprojectnumber` from the Project to the Quote
+  so the customer's internal job/PO reference travels with the quote.
+- Stamps the owning user's contact info into the `eb_owner*` columns
+  on the Quote (`fullname`, `email`, `direct`, `mobile`, `fax`,
+  `title`). Word Template's XML mapper can't traverse `ownerid →
+  systemuser`, so denormalizing the values is the only way to get
+  them onto the printed quote. Owner is read from `target["ownerid"]`
+  when explicitly set on the form, otherwise from the calling user
+  (`InitiatingUserId`). Team-owned quotes skip the stamp. This is a
+  Create-only seed — reassigning the quote later does **not** refresh
+  these fields.
 - Looks up the current tax rate via `TaxRateService` and stamps
   `eb_taxratepercent` (as a percentage – e.g. `8.125`) directly on the
   target row before insert, so a freshly created Quote already shows
