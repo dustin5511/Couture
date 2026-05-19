@@ -14,6 +14,7 @@ namespace Couture.Plugins.MultipleQuotes.Constants
             public const string OpportunityClose = "opportunityclose";
             public const string Product = "product";
             public const string TaxRate = "eb_taxrate";
+            public const string SystemUser = "systemuser";
         }
 
         internal static class Product
@@ -70,6 +71,34 @@ namespace Couture.Plugins.MultipleQuotes.Constants
             public const string ShipToStateOrProvince = "shipto_stateorprovince";
             public const string ShipToPostalCode = "shipto_postalcode";
             public const string ShipToCountry = "shipto_country";
+
+            // Denormalized owner contact fields. Word Template XML mapper
+            // can't traverse the ownerid lookup into systemuser, so the
+            // values get stamped onto the Quote at Create from the
+            // owning user's record. Create-only — not refreshed on
+            // Assign / reassignment.
+            public const string OwnerFullname = "eb_ownerfullname";
+            public const string OwnerEmail = "eb_owneremail";
+            public const string OwnerDirect = "eb_ownerdirect";
+            public const string OwnerMobile = "eb_ownermobile";
+            public const string OwnerFax = "eb_ownerfax";
+            public const string OwnerTitle = "eb_ownertitle";
+
+            // Customer's internal job / project reference, copied from
+            // the parent Opportunity at Create.
+            public const string CustomerJobProjectNumber = "eb_customerjobprojectnumber";
+        }
+
+        internal static class SystemUser
+        {
+            public const string Id = "systemuserid";
+            public const string FullName = "fullname";
+            public const string InternalEmailAddress = "internalemailaddress";
+            /// Main / direct desk phone on the systemuser record.
+            public const string Telephone1 = "address1_telephone1";
+            public const string MobilePhone = "mobilephone";
+            public const string Fax = "address1_fax";
+            public const string JobTitle = "jobtitle";
         }
 
         internal static class Opportunity
@@ -109,6 +138,10 @@ namespace Couture.Plugins.MultipleQuotes.Constants
             public const string JobsiteCity = "eb_jobsitecity";
             public const string JobsiteState = "eb_jobsitestate";
             public const string JobsiteCountry = "eb_jobsitecountry";
+
+            /// Customer's internal job / project reference number.
+            /// Copied to the new Quote at Create.
+            public const string CustomerJobProjectNumber = "eb_customerjobprojectnumber";
         }
 
         internal static class QuoteDetail

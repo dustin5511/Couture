@@ -26,7 +26,13 @@ namespace Couture.Plugins.MultipleQuotes
     ///   • copies the Project's job-site address (eb_jobsitestreet1/2,
     ///     city, state, postal, country) onto the Quote's standard
     ///     shipto_* fields so the printed quote shows the delivery
-    ///     address without any extra lookup, and
+    ///     address without any extra lookup,
+    ///   • copies eb_customerjobprojectnumber from the parent Project
+    ///     onto the Quote,
+    ///   • stamps eb_owner* (fullname, email, direct, mobile, fax,
+    ///     title) on the Quote from the owning user's systemuser record
+    ///     so the printed quote can show the salesperson's contact
+    ///     details without traversing the ownerid lookup, and
     ///   • stamps eb_taxratepercent on the target row by looking up the
     ///     rate from eb_taxrate, so the rate is visible on the printed
     ///     quote even before any line items exist.
@@ -80,7 +86,8 @@ namespace Couture.Plugins.MultipleQuotes
                     SchemaConstants.Opportunity.JobsiteStreet2,
                     SchemaConstants.Opportunity.JobsiteCity,
                     SchemaConstants.Opportunity.JobsiteState,
-                    SchemaConstants.Opportunity.JobsiteCountry));
+                    SchemaConstants.Opportunity.JobsiteCountry,
+                    SchemaConstants.Opportunity.CustomerJobProjectNumber));
 
             var missing = new List<string>();
 
@@ -155,18 +162,32 @@ namespace Couture.Plugins.MultipleQuotes
             // the quote afterward. ZIP is also written here so the
             // shipto block is internally consistent even though the tax
             // lookup still reads eb_jobsitezip off the Project.
-            SeedShipToField(target, SchemaConstants.Quote.ShipToLine1,
+            SeedStringField(target, SchemaConstants.Quote.ShipToLine1,
                 opp.GetAttributeValue<string>(SchemaConstants.Opportunity.JobsiteStreet1));
-            SeedShipToField(target, SchemaConstants.Quote.ShipToLine2,
+            SeedStringField(target, SchemaConstants.Quote.ShipToLine2,
                 opp.GetAttributeValue<string>(SchemaConstants.Opportunity.JobsiteStreet2));
-            SeedShipToField(target, SchemaConstants.Quote.ShipToCity,
+            SeedStringField(target, SchemaConstants.Quote.ShipToCity,
                 opp.GetAttributeValue<string>(SchemaConstants.Opportunity.JobsiteCity));
-            SeedShipToField(target, SchemaConstants.Quote.ShipToStateOrProvince,
+            SeedStringField(target, SchemaConstants.Quote.ShipToStateOrProvince,
                 opp.GetAttributeValue<string>(SchemaConstants.Opportunity.JobsiteState));
-            SeedShipToField(target, SchemaConstants.Quote.ShipToPostalCode, jobsiteZip);
-            SeedShipToField(target, SchemaConstants.Quote.ShipToCountry,
+            SeedStringField(target, SchemaConstants.Quote.ShipToPostalCode, jobsiteZip);
+            SeedStringField(target, SchemaConstants.Quote.ShipToCountry,
                 opp.GetAttributeValue<string>(SchemaConstants.Opportunity.JobsiteCountry));
             ctx.Tracing.Trace("Seeded shipto_* fields from Project job-site address.");
+
+            // ── Seed customer's job / project number ────────────────────
+            SeedStringField(target, SchemaConstants.Quote.CustomerJobProjectNumber,
+                opp.GetAttributeValue<string>(
+                    SchemaConstants.Opportunity.CustomerJobProjectNumber));
+
+            // ── Stamp owner contact details ─────────────────────────────
+            // Word Template XML mapper can't traverse ownerid → systemuser,
+            // so denormalize the owning user's contact info onto the
+            // Quote. Owner defaults to the calling user on Create unless
+            // the form explicitly set ownerid; either way we resolve to
+            // the systemuser record and stamp. Team-owned quotes skip
+            // the stamp – nothing to map a team onto these fields.
+            StampOwnerFields(ctx, target);
 
             // ── Stamp tax rate on the new quote ─────────────────────────
             // Pre-Validation runs before the platform writes the row, so
@@ -194,15 +215,77 @@ namespace Couture.Plugins.MultipleQuotes
 
         /// Writes `value` into `target[fieldName]` unless the user has
         /// already supplied something for that field on the inbound
-        /// Quote – this keeps any manual ship-to override the user
-        /// typed into the form before save. Empty / whitespace project
-        /// values are skipped so we don't blank out a legitimate manual
-        /// entry with a missing job-site column.
-        private static void SeedShipToField(Entity target, string fieldName, string value)
+        /// Quote – this keeps any manual override the user typed into
+        /// the form before save. Empty / whitespace source values are
+        /// skipped so we don't blank out a legitimate manual entry
+        /// with a missing source column.
+        private static void SeedStringField(Entity target, string fieldName, string value)
         {
             if (target.Contains(fieldName)) return;
             if (string.IsNullOrWhiteSpace(value)) return;
             target[fieldName] = value;
+        }
+
+        /// Resolves the user who will own the new Quote and copies their
+        /// contact info into the eb_owner* columns on Target. The owner
+        /// is either explicitly set on the form (target["ownerid"]) or
+        /// defaulted by the platform to the calling user; we read
+        /// InitiatingUserId in the fallback case because UserId can be
+        /// SYSTEM in some impersonation contexts. Team-owned quotes
+        /// have no contact info to denormalize so we just trace and
+        /// move on.
+        private static void StampOwnerFields(PluginContext ctx, Entity target)
+        {
+            Guid userId;
+
+            var explicitOwner = target.GetAttributeValue<EntityReference>("ownerid");
+            if (explicitOwner != null)
+            {
+                if (explicitOwner.LogicalName != SchemaConstants.Entities.SystemUser)
+                {
+                    ctx.Tracing.Trace(
+                        "ownerid is a {0}, not a user – skipping owner stamp.",
+                        explicitOwner.LogicalName);
+                    return;
+                }
+                userId = explicitOwner.Id;
+            }
+            else
+            {
+                userId = ctx.Execution.InitiatingUserId;
+            }
+
+            if (userId == Guid.Empty)
+            {
+                ctx.Tracing.Trace("No resolvable owner – skipping owner stamp.");
+                return;
+            }
+
+            var user = ctx.Service.Retrieve(
+                SchemaConstants.Entities.SystemUser,
+                userId,
+                new ColumnSet(
+                    SchemaConstants.SystemUser.FullName,
+                    SchemaConstants.SystemUser.InternalEmailAddress,
+                    SchemaConstants.SystemUser.Telephone1,
+                    SchemaConstants.SystemUser.MobilePhone,
+                    SchemaConstants.SystemUser.Fax,
+                    SchemaConstants.SystemUser.JobTitle));
+
+            SeedStringField(target, SchemaConstants.Quote.OwnerFullname,
+                user.GetAttributeValue<string>(SchemaConstants.SystemUser.FullName));
+            SeedStringField(target, SchemaConstants.Quote.OwnerEmail,
+                user.GetAttributeValue<string>(SchemaConstants.SystemUser.InternalEmailAddress));
+            SeedStringField(target, SchemaConstants.Quote.OwnerDirect,
+                user.GetAttributeValue<string>(SchemaConstants.SystemUser.Telephone1));
+            SeedStringField(target, SchemaConstants.Quote.OwnerMobile,
+                user.GetAttributeValue<string>(SchemaConstants.SystemUser.MobilePhone));
+            SeedStringField(target, SchemaConstants.Quote.OwnerFax,
+                user.GetAttributeValue<string>(SchemaConstants.SystemUser.Fax));
+            SeedStringField(target, SchemaConstants.Quote.OwnerTitle,
+                user.GetAttributeValue<string>(SchemaConstants.SystemUser.JobTitle));
+
+            ctx.Tracing.Trace("Stamped eb_owner* from systemuser {0}.", userId);
         }
     }
 }
