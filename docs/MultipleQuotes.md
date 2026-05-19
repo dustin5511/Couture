@@ -60,6 +60,8 @@ quote-creation validation / tax calculation pipeline:
 | ---------------------------------- | ------ | -------------------------------------------------------------------------------- |
 | `eb_taxamounttrailer`              | Money  | `eb_deliveredpricetrailer × quantity × rate` (0 for FOB-only preference or incoming material). |
 | `eb_taxamountstraight`             | Money  | `eb_deliveredpricestraight × quantity × rate` (0 for FOB-only preference or incoming material). |
+| `eb_unitpricetrailerwithtax`       | Money  | Per-ton delivered unit price including tax: `eb_deliveredpricetrailer × (1 + rate)` (0 for FOB-only preference or incoming material). Customer-facing column in the quote-line grid and on each line of the printed Word template. |
+| `eb_unitpricestraightwithtax`      | Money  | Per-ton delivered unit price including tax: `eb_deliveredpricestraight × (1 + rate)` (0 for FOB-only preference or incoming material). Customer-facing column in the quote-line grid and on each line of the printed Word template. |
 
 ### Tax Rate (`eb_taxrate`)
 
@@ -172,12 +174,13 @@ On success the plugin also:
 `CalculateTaxPlugin` runs on quote-detail Create/Update **after**
 `CalculateDeliveryPricingPlugin`, so the trailer and straight-truck
 delivered prices are already on the row. The logic per Delivery
-Preference value:
+Preference value (mirrored for both the qty-dependent tax dollar
+amounts **and** the qty-independent with-tax unit prices):
 
-| Preference          | `eb_taxamounttrailer`                              | `eb_taxamountstraight`                              |
+| Preference          | `eb_taxamount*` (× qty)                            | `eb_unitprice*withtax` (per ton)                    |
 | ------------------- | -------------------------------------------------- | --------------------------------------------------- |
 | `1` FOB             | 0                                                  | 0                                                   |
-| `2` Delivery        | `deliveredpricetrailer × qty × rate` (0 if incoming) | `deliveredpricestraight × qty × rate` (0 if incoming) |
+| `2` Delivery        | `deliveredprice × qty × rate` (0 if incoming)      | `deliveredprice × (1 + rate)` (0 if incoming)       |
 | `3` FOB + Delivery  | same as Delivery                                   | same as Delivery                                    |
 
 Rate is resolved by `TaxRateService.LookupCombinedRate("MN",

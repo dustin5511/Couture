@@ -168,6 +168,15 @@ namespace Couture.Plugins.MultipleQuotes.Constants
             //   eb_taxamountstraight = deliveredpricestraight * qty * rate
             public const string TaxAmountTrailer = "eb_taxamounttrailer";
             public const string TaxAmountStraight = "eb_taxamountstraight";
+
+            // Per-ton delivered unit prices INCLUDING tax. Customer-facing
+            // numbers shown in the quote-line grid and on each line of the
+            // printed Word template:
+            //   eb_unitpricetrailerwithtax  = deliveredpricetrailer  * (1 + rate)
+            //   eb_unitpricestraightwithtax = deliveredpricestraight * (1 + rate)
+            // Cleared (0) for FOB-only quotes and incoming-material lines.
+            public const string UnitPriceTrailerWithTax = "eb_unitpricetrailerwithtax";
+            public const string UnitPriceStraightWithTax = "eb_unitpricestraightwithtax";
         }
 
         internal static class TaxRate

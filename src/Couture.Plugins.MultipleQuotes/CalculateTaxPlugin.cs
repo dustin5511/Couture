@@ -6,21 +6,26 @@ using Microsoft.Xrm.Sdk.Query;
 
 namespace Couture.Plugins.MultipleQuotes
 {
-    /// Populates the two per-line tax fields on a quote product based on
-    /// the parent Quote's Delivery Preference and the Project's Jobsite ZIP:
+    /// Populates the per-line tax fields and the with-tax unit prices on
+    /// a quote product based on the parent Quote's Delivery Preference
+    /// and the Project's Jobsite ZIP:
     ///
-    ///   FOB only (1)             → tax = 0 on both fields.
+    ///   FOB only (1)             → tax = 0, unit-with-tax = 0 on both
+    ///                              trailer and straight fields.
     ///   Delivery (2)             → tax = deliveredprice * qty * rate
-    ///                              (zero if it is incoming material).
+    ///                              unit-with-tax = deliveredprice * (1+rate)
+    ///                              (all zero if it is incoming material).
     ///   FOB and Delivery (3)     → same as Delivery; only the
     ///                              QuoteTotalsRollupPlugin decides which
     ///                              header total the tax lands in.
     ///
-    /// Two tax fields are stored because the trailer and straight-truck
-    /// delivered prices differ (different freight components) and MN taxes
-    /// the full delivered price including freight, so the dollar tax on
-    /// the same line is different in the trailer vs straight-truck
-    /// scenario.
+    /// Four fields per line are stored: two tax dollar amounts (qty-
+    /// dependent, drive the header tax totals) and two with-tax unit
+    /// prices per ton (qty-independent, customer-facing numbers shown
+    /// in the quote-line grid and on the printed Word template).
+    /// Trailer and straight-truck are separate columns because their
+    /// delivered prices differ (different freight components) and MN
+    /// taxes the full delivered price including freight.
     ///
     /// Tax rate is resolved by stripping non-digits from the opportunity's
     /// eb_jobsitezip and querying eb_taxrate for the row whose eb_zip
@@ -105,19 +110,10 @@ namespace Couture.Plugins.MultipleQuotes
             if (preferenceValue == SchemaConstants.DeliveryPreference.FOB || isIncoming)
             {
                 ctx.Tracing.Trace(
-                    "FOB-only or incoming material – clearing both tax fields. " +
+                    "FOB-only or incoming material – clearing tax + unit-with-tax. " +
                     "Preference={0}, IsIncoming={1}",
                     preferenceValue, isIncoming);
-                WriteTax(ctx, target.Id, 0m, 0m);
-                return;
-            }
-
-            var quantity = record.GetAttributeValue<decimal>(
-                SchemaConstants.QuoteDetail.Quantity);
-            if (quantity <= 0)
-            {
-                ctx.Tracing.Trace("Quantity is zero – clearing tax fields.");
-                WriteTax(ctx, target.Id, 0m, 0m);
+                WriteTaxAndUnitPrices(ctx, target.Id, 0m, 0m, 0m, 0m);
                 return;
             }
 
@@ -142,16 +138,31 @@ namespace Couture.Plugins.MultipleQuotes
                     "Check the eb_taxrate table and the ZIP on the Project.");
             }
 
+            // Unit prices with tax don't depend on quantity, so compute
+            // them before the qty bail-out – the customer-facing
+            // /ton price is meaningful even when qty is still 0 on a
+            // freshly added line.
+            var unitTrailerWithTax = ComputeUnitWithTax(deliveredTrailer, rate.Value);
+            var unitStraightWithTax = ComputeUnitWithTax(deliveredStraight, rate.Value);
+
+            var quantity = record.GetAttributeValue<decimal>(
+                SchemaConstants.QuoteDetail.Quantity);
+
             // eb_rate is a fraction (e.g. 0.081250 = 8.125%); multiply
-            // straight against the dollar amount.
+            // straight against the dollar amount. ComputeLineTax returns
+            // 0 for zero qty so we don't need a separate branch.
             var taxTrailer = ComputeLineTax(deliveredTrailer, quantity, rate.Value);
             var taxStraight = ComputeLineTax(deliveredStraight, quantity, rate.Value);
 
             ctx.Tracing.Trace(
-                "Tax line totals: trailer={0}, straight={1}, rate={2}, qty={3}",
-                taxTrailer, taxStraight, rate, quantity);
+                "Tax line totals: trailer={0}, straight={1}; unit-with-tax: " +
+                "trailer={2}, straight={3}; rate={4}, qty={5}",
+                taxTrailer, taxStraight, unitTrailerWithTax, unitStraightWithTax,
+                rate, quantity);
 
-            WriteTax(ctx, target.Id, taxTrailer, taxStraight);
+            WriteTaxAndUnitPrices(ctx, target.Id,
+                taxTrailer, taxStraight,
+                unitTrailerWithTax, unitStraightWithTax);
 
             // Keep the rate stamped on the parent Quote in sync. We re-write
             // every time rather than guarding because the opportunity's ZIP
@@ -177,13 +188,22 @@ namespace Couture.Plugins.MultipleQuotes
             return Math.Round(deliveredPrice.Value * quantity * rate, 2);
         }
 
-        private static void WriteTax(PluginContext ctx, Guid quoteDetailId,
-            decimal taxTrailer, decimal taxStraight)
+        private static decimal ComputeUnitWithTax(Money deliveredPrice, decimal rate)
+        {
+            if (deliveredPrice == null || deliveredPrice.Value <= 0) return 0m;
+            return Math.Round(deliveredPrice.Value * (1m + rate), 2);
+        }
+
+        private static void WriteTaxAndUnitPrices(PluginContext ctx, Guid quoteDetailId,
+            decimal taxTrailer, decimal taxStraight,
+            decimal unitTrailerWithTax, decimal unitStraightWithTax)
         {
             var update = new Entity(SchemaConstants.Entities.QuoteDetail, quoteDetailId)
             {
                 [SchemaConstants.QuoteDetail.TaxAmountTrailer] = new Money(taxTrailer),
-                [SchemaConstants.QuoteDetail.TaxAmountStraight] = new Money(taxStraight)
+                [SchemaConstants.QuoteDetail.TaxAmountStraight] = new Money(taxStraight),
+                [SchemaConstants.QuoteDetail.UnitPriceTrailerWithTax] = new Money(unitTrailerWithTax),
+                [SchemaConstants.QuoteDetail.UnitPriceStraightWithTax] = new Money(unitStraightWithTax)
             };
             ctx.Service.Update(update);
         }
