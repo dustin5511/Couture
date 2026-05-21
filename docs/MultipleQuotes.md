@@ -10,8 +10,9 @@ and will close the opportunity as Won the moment any quote is won. The
 * Closing (or cancelling) the final open quote on an opportunity cascades to
   the opportunity: if any sibling was Won → opportunity is closed Won, if all
   are Lost/Cancelled → opportunity is closed Lost.
-* A money field on the opportunity always reflects the sum of `totalamount`
-  for every quote currently in Active or Won state.
+* A money field on the opportunity always reflects the sum of `eb_fobtotal`
+  (base product revenue – no delivery, no tax) for every quote currently in
+  Active or Won state.
 * The user can still close the opportunity manually – the plugin never
   overrides a state that was already set to Won/Lost before we run.
 
@@ -102,7 +103,7 @@ All steps are **synchronous** and run as the calling user.
 | 3  | `QuoteWinPlugin`                      | Win     | quote          | PostOperation 40  | –     | –                                                                                                              | –                                                                                                                                            |
 | 4  | `QuoteClosePlugin`                    | Close   | quote          | PostOperation 40  | –     | –                                                                                                              | –                                                                                                                                            |
 | 5  | `OpportunityQuoteRollupPlugin`        | Create  | quote          | PostOperation 40  | –     | –                                                                                                              | –                                                                                                                                            |
-| 6  | `OpportunityQuoteRollupPlugin`        | Update  | quote          | PostOperation 40  | –     | totalamount, statecode, statuscode, opportunityid                                                              | PreImage `preImage`: opportunityid, statecode                                                                                                |
+| 6  | `OpportunityQuoteRollupPlugin`        | Update  | quote          | PostOperation 40  | –     | eb_fobtotal, statecode, statuscode, opportunityid                                                              | PreImage `preImage`: opportunityid, statecode                                                                                                |
 | 7  | `OpportunityQuoteRollupPlugin`        | Delete  | quote          | PostOperation 40  | –     | –                                                                                                              | PreImage `preImage`: opportunityid                                                                                                           |
 | 8  | `PopulateIncomingMaterialFlag`        | Create  | quotedetail    | PreOperation 20   | 1     | –                                                                                                              | –                                                                                                                                            |
 | 9  | `CalculateDeliveryPricingPlugin`      | Create  | quotedetail    | PostOperation 40  | 2     | –                                                                                                              | PostImage `PostImage`: priceperunit, quantity, eb_isincomingmaterial, quoteid, productid                                                     |

@@ -108,8 +108,12 @@ namespace Couture.Plugins.MultipleQuotes.Constants
             public const string StatusCode = "statuscode";
 
             /// Custom money field on Opportunity that stores the sum of
-            /// totalamount for every quote that is currently Active or Won.
-            /// Update the prefix/name to match the target environment.
+            /// eb_fobtotal for every quote currently Active or Won.
+            /// FOB total = Σ priceperunit × quantity across the quote's
+            /// line items — base product revenue, no delivery, no tax —
+            /// which is what Kraemer wants to recognise regardless of
+            /// the quote's delivery preference. Update the prefix/name
+            /// to match the target environment.
             public const string ActiveWonQuotesTotal = "eb_activewonquotestotal";
 
             // Freight inputs and pre-calculated rates used by

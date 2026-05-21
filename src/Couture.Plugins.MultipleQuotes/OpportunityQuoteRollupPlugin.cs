@@ -6,13 +6,17 @@ using Microsoft.Xrm.Sdk;
 namespace Couture.Plugins.MultipleQuotes
 {
     /// Keeps the opportunity's "total of active + won quotes" money field in
-    /// sync. Delta-trigger only: we refresh when totalamount, state or the
-    /// parent opportunity change – not on every Update of an unrelated field.
+    /// sync. The rollup sums each active/won quote's eb_fobtotal (product
+    /// prices × qty, no delivery, no tax) – Kraemer wants the revenue
+    /// number to reflect the base product value regardless of delivery
+    /// preference. Delta-trigger only: we refresh when eb_fobtotal, state
+    /// or the parent opportunity change – not on every Update of an
+    /// unrelated field.
     ///
     /// Register on:
     ///   Message=Create, PrimaryEntity=quote, Stage=PostOperation (40)
     ///   Message=Update, PrimaryEntity=quote, Stage=PostOperation (40)
-    ///     Filter attributes: totalamount, statecode, statuscode, opportunityid
+    ///     Filter attributes: eb_fobtotal, statecode, statuscode, opportunityid
     ///     Pre-image "preImage" with columns: opportunityid, statecode
     ///   Message=Delete, PrimaryEntity=quote, Stage=PostOperation (40)
     ///     Pre-image "preImage" with columns: opportunityid

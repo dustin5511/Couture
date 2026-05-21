@@ -27,8 +27,8 @@ namespace Couture.Plugins.MultipleQuotes.Helpers
         }
 
         /// Returns every quote belonging to the opportunity except the one we
-        /// are currently processing. Always hydrates state/status/total so
-        /// callers don't need to re-retrieve.
+        /// are currently processing. Always hydrates state/status/FOB total
+        /// so callers don't need to re-retrieve.
         public List<Entity> RetrieveSiblingQuotes(Guid opportunityId, Guid excludeQuoteId)
         {
             var query = new QueryExpression(SchemaConstants.Entities.Quote)
@@ -37,7 +37,7 @@ namespace Couture.Plugins.MultipleQuotes.Helpers
                     SchemaConstants.Quote.Id,
                     SchemaConstants.Quote.StateCode,
                     SchemaConstants.Quote.StatusCode,
-                    SchemaConstants.Quote.TotalAmount,
+                    SchemaConstants.Quote.FobTotal,
                     SchemaConstants.Quote.Name,
                     SchemaConstants.Quote.OpportunityId),
                 NoLock = true
@@ -156,7 +156,7 @@ namespace Couture.Plugins.MultipleQuotes.Helpers
                     continue;
                 }
 
-                var amount = quote.GetAttributeValue<Money>(SchemaConstants.Quote.TotalAmount);
+                var amount = quote.GetAttributeValue<Money>(SchemaConstants.Quote.FobTotal);
                 if (amount != null)
                 {
                     total += amount.Value;
