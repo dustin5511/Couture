@@ -112,6 +112,7 @@ All steps are **synchronous** and run as the calling user.
 | 12 | `CalculateTaxPlugin`                  | Update  | quotedetail    | PostOperation 50  | –     | priceperunit, quantity, eb_isincomingmaterial, eb_deliveredpricetrailer, eb_deliveredpricestraight              | PostImage `PostImage`: priceperunit, quantity, eb_isincomingmaterial, quoteid, eb_deliveredpricetrailer, eb_deliveredpricestraight           |
 | 13 | `RecalcDeliveryOnProjectChange`       | Update  | opportunity    | PostOperation 40  | –     | eb_shippingrateperhour, eb_cycletime, eb_loadtime, eb_unloadtime                                               | PostImage `PostImage`: eb_shippingrateperhour, eb_cycletime, eb_loadtime, eb_unloadtime                                                      |
 | 14 | `RecalcOnQuoteDeliveryPreferenceChange` | Update | quote        | PostOperation 40  | –     | eb_deliverypreference                                                                                          | –                                                                                                                                            |
+| 15 | `SyncPriceListOnCustomerChange`       | Update  | quote          | PostOperation 40  | –     | customerid                                                                                                     | –                                                                                                                                            |
 
 Notes:
 
@@ -120,6 +121,7 @@ Notes:
 - `CalculateDeliveryPricingPlugin` writes per-line delivered prices, extended amounts, **and** rolls up the five Quote-level totals (FOB, delivered trailer/straight, tax trailer/straight). The rollup includes the per-line tax fields written by `CalculateTaxPlugin` at rank 50 on subsequent passes.
 - `RecalcDeliveryOnProjectChange` cascades opportunity freight-input edits to every active quote underneath, then runs the same 5-field rollup so the quote-level totals stay consistent.
 - `RecalcOnQuoteDeliveryPreferenceChange` re-fires the line-level tax + rollup when the user edits `eb_deliverypreference` on a quote. It touches each child `quotedetail` by writing its current quantity back, which trips the filter attribute on the downstream pricing plugins so they re-read the (now updated) preference from the quote and produce new tax amounts and totals.
+- `SyncPriceListOnCustomerChange` swaps `pricelevelid` to the new customer's `defaultpricelevelid` whenever `customerid` changes on a quote. By design it does **not** re-price existing line items — the user manually adjusts those if needed. Account-only (rejects Contact-typed customers); skips Won/Closed quotes.
 
 ## 4. Behaviour summary
 
@@ -162,6 +164,16 @@ On success the plugin also:
   (`InitiatingUserId`). Team-owned quotes skip the stamp. This is a
   Create-only seed — reassigning the quote later does **not** refresh
   these fields.
+- Overrides `customerid` to the placeholder account `Default (do not
+  remove)` and seeds `pricelevelid` to that account's
+  `defaultpricelevelid`. Unlike the other seeds this one **overrides**
+  whatever the OOB quote-from-opportunity flow copied across — every
+  new quote starts on the same baseline so the salesperson explicitly
+  picks the real customer afterward, which fires
+  `SyncPriceListOnCustomerChange` to swap the price list. Throws a
+  clear error if the placeholder account is missing. If the
+  placeholder account has no `defaultpricelevelid`, the quote is
+  created without a price list (trace warning only).
 - Looks up the current tax rate via `TaxRateService` and stamps
   `eb_taxratepercent` (as a percentage – e.g. `8.125`) directly on the
   target row before insert, so a freshly created Quote already shows

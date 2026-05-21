@@ -32,7 +32,12 @@ namespace Couture.Plugins.MultipleQuotes
     ///   • stamps eb_owner* (fullname, email, direct, mobile, fax,
     ///     title) on the Quote from the owning user's systemuser record
     ///     so the printed quote can show the salesperson's contact
-    ///     details without traversing the ownerid lookup, and
+    ///     details without traversing the ownerid lookup,
+    ///   • overrides customerid + pricelevelid to the "Default (do not
+    ///     remove)" placeholder account and its default price list so
+    ///     every new quote starts on a known footing. The user then
+    ///     changes the customer on the quote, which fires
+    ///     SyncPriceListOnCustomerChange to swap the price list, and
     ///   • stamps eb_taxratepercent on the target row by looking up the
     ///     rate from eb_taxrate, so the rate is visible on the printed
     ///     quote even before any line items exist.
@@ -189,6 +194,14 @@ namespace Couture.Plugins.MultipleQuotes
             // the stamp – nothing to map a team onto these fields.
             StampOwnerFields(ctx, target);
 
+            // ── Override customer + price list to the placeholder account ─
+            // Kraemer wants every new quote to start on the "Default (do
+            // not remove)" account regardless of whatever customerid the
+            // OOB quote-from-opportunity flow copied across. The user
+            // picks the real customer on the quote, which then triggers
+            // SyncPriceListOnCustomerChange to swap pricelevelid.
+            SeedPlaceholderCustomerAndPriceList(ctx, target);
+
             // ── Stamp tax rate on the new quote ─────────────────────────
             // Pre-Validation runs before the platform writes the row, so
             // mutating the Target stores the value in the initial insert
@@ -286,6 +299,65 @@ namespace Couture.Plugins.MultipleQuotes
                 user.GetAttributeValue<string>(SchemaConstants.SystemUser.JobTitle));
 
             ctx.Tracing.Trace("Stamped eb_owner* from systemuser {0}.", userId);
+        }
+
+        /// Looks up the placeholder Account by exact name and stamps it
+        /// onto target["customerid"]. The account's defaultpricelevelid
+        /// rides along to seed target["pricelevelid"]. Unlike the
+        /// shipto / owner seeds above, this one **overrides** any value
+        /// the OOB quote-from-opportunity flow copied in – Kraemer
+        /// wants every new quote to start from the same baseline so the
+        /// salesperson explicitly picks the real customer afterward.
+        private static void SeedPlaceholderCustomerAndPriceList(
+            PluginContext ctx, Entity target)
+        {
+            var query = new QueryExpression(SchemaConstants.Entities.Account)
+            {
+                TopCount = 1,
+                ColumnSet = new ColumnSet(
+                    SchemaConstants.Account.DefaultPriceLevelId),
+                Criteria = new FilterExpression(LogicalOperator.And)
+                {
+                    Conditions =
+                    {
+                        new ConditionExpression(
+                            SchemaConstants.Account.Name,
+                            ConditionOperator.Equal,
+                            SchemaConstants.Account.DefaultPlaceholderName)
+                    }
+                }
+            };
+
+            var match = ctx.Service.RetrieveMultiple(query);
+            if (match.Entities.Count == 0)
+            {
+                throw new InvalidPluginExecutionException(
+                    "The placeholder account '" +
+                    SchemaConstants.Account.DefaultPlaceholderName +
+                    "' was not found. Please create that account before " +
+                    "creating quotes — every new quote initialises against it.");
+            }
+
+            var defaultAcct = match.Entities[0];
+            target[SchemaConstants.Quote.CustomerId] = new EntityReference(
+                SchemaConstants.Entities.Account, defaultAcct.Id);
+
+            var defaultPriceList = defaultAcct.GetAttributeValue<EntityReference>(
+                SchemaConstants.Account.DefaultPriceLevelId);
+            if (defaultPriceList != null)
+            {
+                target[SchemaConstants.Quote.PriceLevelId] = defaultPriceList;
+                ctx.Tracing.Trace(
+                    "Seeded customerid={0} and pricelevelid={1} from placeholder.",
+                    defaultAcct.Id, defaultPriceList.Id);
+            }
+            else
+            {
+                ctx.Tracing.Trace(
+                    "Seeded customerid={0} from placeholder; account has no " +
+                    "defaultpricelevelid so pricelevelid is left unset.",
+                    defaultAcct.Id);
+            }
         }
     }
 }

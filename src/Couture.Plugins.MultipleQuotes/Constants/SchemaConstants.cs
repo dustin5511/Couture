@@ -15,6 +15,7 @@ namespace Couture.Plugins.MultipleQuotes.Constants
             public const string Product = "product";
             public const string TaxRate = "eb_taxrate";
             public const string SystemUser = "systemuser";
+            public const string Account = "account";
         }
 
         internal static class Product
@@ -37,6 +38,14 @@ namespace Couture.Plugins.MultipleQuotes.Constants
             public const string StateCode = "statecode";
             public const string StatusCode = "statuscode";
             public const string Name = "name";
+            /// Polymorphic customer lookup (account / contact). Kraemer's
+            /// pipeline only supports Account customers — SyncPriceList-
+            /// OnCustomerChange throws if a Contact is set here.
+            public const string CustomerId = "customerid";
+            /// Standard Quote price list lookup. Kept in sync with the
+            /// customer's defaultpricelevelid by
+            /// SyncPriceListOnCustomerChange.
+            public const string PriceLevelId = "pricelevelid";
 
             // Custom money totals populated by QuoteTotalsRollupPlugin from
             // the quote's line items. FOB total never includes tax; delivered
@@ -99,6 +108,23 @@ namespace Couture.Plugins.MultipleQuotes.Constants
             public const string MobilePhone = "mobilephone";
             public const string Fax = "address1_fax";
             public const string JobTitle = "jobtitle";
+        }
+
+        internal static class Account
+        {
+            public const string Id = "accountid";
+            public const string Name = "name";
+            /// OOB Account → Price List lookup. Drives the per-account
+            /// price list applied to new quotes.
+            public const string DefaultPriceLevelId = "defaultpricelevelid";
+
+            /// Placeholder account every quote is initialised against
+            /// at Create. The user picks the real customer afterward;
+            /// SyncPriceListOnCustomerChange swaps the quote's
+            /// pricelevelid when they do. The literal is hardcoded
+            /// because Kraemer flagged the row itself with "do not
+            /// remove" so a rename is unlikely.
+            public const string DefaultPlaceholderName = "Default (do not remove)";
         }
 
         internal static class Opportunity
