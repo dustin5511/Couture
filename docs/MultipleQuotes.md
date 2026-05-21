@@ -12,7 +12,8 @@ and will close the opportunity as Won the moment any quote is won. The
   are Lost/Cancelled → opportunity is closed Lost.
 * A money field on the opportunity always reflects the sum of `eb_fobtotal`
   (base product revenue – no delivery, no tax) for every quote currently in
-  Active or Won state.
+  Active or Won state. Quotes with `eb_delayed = true` are excluded from
+  this sum even when their state is Active/Won.
 * The user can still close the opportunity manually – the plugin never
   overrides a state that was already set to Won/Lost before we run.
 
@@ -54,6 +55,7 @@ quote-creation validation / tax calculation pipeline:
 | `eb_ownermobile`                   | Text             | Denormalized from owning user's `mobilephone` at Create.             |
 | `eb_ownerfax`                      | Text             | Denormalized from owning user's `address1_fax` at Create.            |
 | `eb_ownertitle`                    | Text             | Denormalized from owning user's `jobtitle` at Create.                |
+| `eb_delayed`                       | Two Options      | User-set "paused / on hold" flag. When `true`, `OpportunityQuoteRollupPlugin` excludes this quote from the project's `eb_activewonquotestotal` sum even if its state is Active/Won. |
 
 ### Quote Product (quotedetail)
 
@@ -103,7 +105,7 @@ All steps are **synchronous** and run as the calling user.
 | 3  | `QuoteWinPlugin`                      | Win     | quote          | PostOperation 40  | –     | –                                                                                                              | –                                                                                                                                            |
 | 4  | `QuoteClosePlugin`                    | Close   | quote          | PostOperation 40  | –     | –                                                                                                              | –                                                                                                                                            |
 | 5  | `OpportunityQuoteRollupPlugin`        | Create  | quote          | PostOperation 40  | –     | –                                                                                                              | –                                                                                                                                            |
-| 6  | `OpportunityQuoteRollupPlugin`        | Update  | quote          | PostOperation 40  | –     | eb_fobtotal, statecode, statuscode, opportunityid                                                              | PreImage `preImage`: opportunityid, statecode                                                                                                |
+| 6  | `OpportunityQuoteRollupPlugin`        | Update  | quote          | PostOperation 40  | –     | eb_fobtotal, statecode, statuscode, opportunityid, eb_delayed                                                  | PreImage `preImage`: opportunityid, statecode                                                                                                |
 | 7  | `OpportunityQuoteRollupPlugin`        | Delete  | quote          | PostOperation 40  | –     | –                                                                                                              | PreImage `preImage`: opportunityid                                                                                                           |
 | 8  | `PopulateIncomingMaterialFlag`        | Create  | quotedetail    | PreOperation 20   | 1     | –                                                                                                              | –                                                                                                                                            |
 | 9  | `CalculateDeliveryPricingPlugin`      | Create  | quotedetail    | PostOperation 40  | 2     | –                                                                                                              | PostImage `PostImage`: priceperunit, quantity, eb_isincomingmaterial, quoteid, productid                                                     |

@@ -27,8 +27,8 @@ namespace Couture.Plugins.MultipleQuotes.Helpers
         }
 
         /// Returns every quote belonging to the opportunity except the one we
-        /// are currently processing. Always hydrates state/status/FOB total
-        /// so callers don't need to re-retrieve.
+        /// are currently processing. Always hydrates state/status/FOB total/
+        /// delayed flag so callers don't need to re-retrieve.
         public List<Entity> RetrieveSiblingQuotes(Guid opportunityId, Guid excludeQuoteId)
         {
             var query = new QueryExpression(SchemaConstants.Entities.Quote)
@@ -38,6 +38,7 @@ namespace Couture.Plugins.MultipleQuotes.Helpers
                     SchemaConstants.Quote.StateCode,
                     SchemaConstants.Quote.StatusCode,
                     SchemaConstants.Quote.FobTotal,
+                    SchemaConstants.Quote.Delayed,
                     SchemaConstants.Quote.Name,
                     SchemaConstants.Quote.OpportunityId),
                 NoLock = true
@@ -152,6 +153,14 @@ namespace Couture.Plugins.MultipleQuotes.Helpers
                 var stateValue = state.Value;
                 if (stateValue != SchemaConstants.QuoteState.Active
                     && stateValue != SchemaConstants.QuoteState.Won)
+                {
+                    continue;
+                }
+
+                // Delayed quotes are still Active/Won but the user has
+                // flagged them as paused, so they don't count toward the
+                // project's expected revenue figure.
+                if (quote.GetAttributeValue<bool>(SchemaConstants.Quote.Delayed))
                 {
                     continue;
                 }

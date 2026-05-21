@@ -46,6 +46,11 @@ namespace Couture.Plugins.MultipleQuotes.Constants
             /// customer's defaultpricelevelid by
             /// SyncPriceListOnCustomerChange.
             public const string PriceLevelId = "pricelevelid";
+            /// Two-option flag set by the user when a quote is on hold
+            /// (waiting on customer decision, paused, etc.). When true,
+            /// OpportunityQuoteRollupPlugin excludes the quote from the
+            /// project's eb_activewonquotestotal sum.
+            public const string Delayed = "eb_delayed";
 
             // Custom money totals populated by QuoteTotalsRollupPlugin from
             // the quote's line items. FOB total never includes tax; delivered

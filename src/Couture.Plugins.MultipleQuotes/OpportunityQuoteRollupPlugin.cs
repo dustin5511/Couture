@@ -9,14 +9,16 @@ namespace Couture.Plugins.MultipleQuotes
     /// sync. The rollup sums each active/won quote's eb_fobtotal (product
     /// prices × qty, no delivery, no tax) – Kraemer wants the revenue
     /// number to reflect the base product value regardless of delivery
-    /// preference. Delta-trigger only: we refresh when eb_fobtotal, state
-    /// or the parent opportunity change – not on every Update of an
-    /// unrelated field.
+    /// preference. Quotes flagged eb_delayed = true are excluded even when
+    /// they're Active/Won. Delta-trigger only: we refresh when eb_fobtotal,
+    /// state, eb_delayed or the parent opportunity change – not on every
+    /// Update of an unrelated field.
     ///
     /// Register on:
     ///   Message=Create, PrimaryEntity=quote, Stage=PostOperation (40)
     ///   Message=Update, PrimaryEntity=quote, Stage=PostOperation (40)
-    ///     Filter attributes: eb_fobtotal, statecode, statuscode, opportunityid
+    ///     Filter attributes: eb_fobtotal, statecode, statuscode,
+    ///                        opportunityid, eb_delayed
     ///     Pre-image "preImage" with columns: opportunityid, statecode
     ///   Message=Delete, PrimaryEntity=quote, Stage=PostOperation (40)
     ///     Pre-image "preImage" with columns: opportunityid
