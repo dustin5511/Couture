@@ -25,6 +25,12 @@ namespace Couture.Plugins.MultipleQuotes.Constants
             /// copies it onto each new Quote Product line as
             /// QuoteDetail.IsIncomingMaterial.
             public const string IncomingMaterial = "eb_incomingmaterial";
+
+            /// Lookup to the custom Locations entity (the plant/quarry the
+            /// product comes from). Copied onto each new Quote Product
+            /// line as QuoteDetail.Location so the printed quote shows
+            /// the source location without traversing the productid.
+            public const string Location = "eb_location";
         }
 
         internal static class Quote
@@ -187,6 +193,9 @@ namespace Couture.Plugins.MultipleQuotes.Constants
             public const string PricePerUnit = "priceperunit";
             public const string Quantity = "quantity";
             public const string IsIncomingMaterial = "eb_isincomingmaterial";
+            /// Lookup to Locations. Copied from Product.eb_location at
+            /// Create by PopulateIncomingMaterialFlag.
+            public const string Location = "eb_location";
             public const string DeliveredPriceTrailer = "eb_deliveredpricetrailer";
             public const string DeliveredPriceStraight = "eb_deliveredpricestraight";
 

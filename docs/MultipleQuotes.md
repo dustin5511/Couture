@@ -65,6 +65,7 @@ quote-creation validation / tax calculation pipeline:
 | `eb_taxamountstraight`             | Money  | `eb_deliveredpricestraight × quantity × rate` (0 for FOB-only preference or incoming material). |
 | `eb_unitpricetrailerwithtax`       | Money  | Per-ton delivered unit price including tax: `eb_deliveredpricetrailer × (1 + rate)` (0 for FOB-only preference or incoming material). Customer-facing column in the quote-line grid and on each line of the printed Word template. |
 | `eb_unitpricestraightwithtax`      | Money  | Per-ton delivered unit price including tax: `eb_deliveredpricestraight × (1 + rate)` (0 for FOB-only preference or incoming material). Customer-facing column in the quote-line grid and on each line of the printed Word template. |
+| `eb_location`                      | Lookup → Location | Copied from `Product.eb_location` at quote-line Create by `PopulateIncomingMaterialFlag`. Used on the printed quote to show the source plant/quarry per line. |
 
 ### Tax Rate (`eb_taxrate`)
 
