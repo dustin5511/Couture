@@ -110,7 +110,7 @@ namespace Couture.Plugins.MultipleQuotes.Constants
             /// Custom money field on Opportunity that stores the sum of
             /// totalamount for every quote that is currently Active or Won.
             /// Update the prefix/name to match the target environment.
-            public const string ActiveWonQuotesTotal = "new_activewonquotestotal";
+            public const string ActiveWonQuotesTotal = "eb_activewonquotestotal";
 
             // Freight inputs and pre-calculated rates used by
             // CalculateDeliveryPricingPlugin.

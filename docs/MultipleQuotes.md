@@ -25,7 +25,7 @@ quote-creation validation / tax calculation pipeline:
 
 | Schema name                        | Type      | Notes                                                                 |
 | ---------------------------------- | --------- | --------------------------------------------------------------------- |
-| `new_activewonquotestotal`         | Money     | Populated by `OpportunityQuoteRollupPlugin`.                          |
+| `eb_activewonquotestotal`          | Money     | Populated by `OpportunityQuoteRollupPlugin`.                          |
 | `eb_jobsitezip`                    | Text (10) | Delivery ZIP. Required before a Quote can be created. Accepts 5-digit, 9-digit dashed (`55337-1234`), or 9-digit undashed (`553371234`); the plugin strips non-digits and uses `BeginsWith` against `eb_taxrate`. |
 | `eb_deliverypreference`            | Choice    | Values: `1 = FOB`, `2 = Delivery`, `3 = FOB and Delivery`. Required before a Quote can be created. |
 | `eb_jobsitestreet1`                | Text      | Copied onto Quote `shipto_line1` at quote Create.                     |
@@ -73,7 +73,7 @@ plugin queries it with `eb_state = "MN"` and `eb_zip BeginsWith
 `0.081250` = 8.125%). Build that solution's table before deploying the
 assembly.
 
-If your publisher prefix is not `new_`/`eb_`, or any of the column names
+If your publisher prefix is not `eb_`, or any of the column names
 above differ in your environment, edit the corresponding constant in
 `Constants/SchemaConstants.cs` before building. The `MinnesotaStateName`
 constant on `SchemaConstants.TaxRate` is the literal the lookup uses; the
