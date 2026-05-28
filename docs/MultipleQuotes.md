@@ -12,8 +12,10 @@ and will close the opportunity as Won the moment any quote is won. The
   are Lost/Cancelled → opportunity is closed Lost.
 * A money field on the opportunity always reflects the sum of `eb_fobtotal`
   (base product revenue – no delivery, no tax) for every quote currently in
-  Active or Won state. Quotes with `eb_delayed = true` are excluded from
-  this sum even when their state is Active/Won.
+  Active or Won state. Quotes with status reason `Delayed` (122050002) are
+  excluded from this sum even when their state is Active. Toggling
+  `eb_delayed` automatically sets the status reason via
+  `SetStatusOnDelayedChange`.
 * The user can still close the opportunity manually – the plugin never
   overrides a state that was already set to Won/Lost before we run.
 
@@ -116,6 +118,7 @@ All steps are **synchronous** and run as the calling user.
 | 13 | `RecalcDeliveryOnProjectChange`       | Update  | opportunity    | PostOperation 40  | –     | eb_shippingrateperhour, eb_cycletime, eb_loadtime, eb_unloadtime                                               | PostImage `PostImage`: eb_shippingrateperhour, eb_cycletime, eb_loadtime, eb_unloadtime                                                      |
 | 14 | `RecalcOnQuoteDeliveryPreferenceChange` | Update | quote        | PostOperation 40  | –     | eb_deliverypreference                                                                                          | –                                                                                                                                            |
 | 15 | `SyncPriceListOnCustomerChange`       | Update  | quote          | PostOperation 40  | –     | customerid                                                                                                     | –                                                                                                                                            |
+| 16 | `SetStatusOnDelayedChange`            | Update  | quote          | PostOperation 40  | –     | eb_delayed                                                                                                     | –                                                                                                                                            |
 
 Notes:
 

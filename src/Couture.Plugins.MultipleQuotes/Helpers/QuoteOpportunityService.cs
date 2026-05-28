@@ -157,10 +157,13 @@ namespace Couture.Plugins.MultipleQuotes.Helpers
                     continue;
                 }
 
-                // Delayed quotes are still Active/Won but the user has
-                // flagged them as paused, so they don't count toward the
-                // project's expected revenue figure.
-                if (quote.GetAttributeValue<bool>(SchemaConstants.Quote.Delayed))
+                // Delayed quotes have status reason 122050002 under the
+                // Active state. They don't count toward the project's
+                // expected revenue figure.
+                var status = quote.GetAttributeValue<OptionSetValue>(
+                    SchemaConstants.Quote.StatusCode);
+                if (status != null
+                    && status.Value == SchemaConstants.QuoteStatus.Delayed)
                 {
                     continue;
                 }

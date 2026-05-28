@@ -279,6 +279,7 @@ namespace Couture.Plugins.MultipleQuotes.Constants
             public const int Lost = 5;
             public const int Canceled = 6;
             public const int Revised = 7;
+            public const int Delayed = 122050002;
         }
 
         internal static class OpportunityState
