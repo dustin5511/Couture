@@ -10,14 +10,17 @@ namespace Couture.Plugins.MultipleQuotes
 {
     /// Prevents creation of a Quote when the parent Project (Opportunity)
     /// is missing any of the inputs the rest of the pricing pipeline
-    /// depends on. Three buckets of checks, each surfaced as a single
-    /// readable error message:
+    /// depends on. Surfaced as a single readable error message listing
+    /// every missing field.
     ///
+    /// Delivery preference is **always** required. The other checks
+    /// only run for Delivery / FOB+Delivery quotes:
     ///   Freight calculation – shipping rate, cycle time, load time,
     ///                          unload time (drives delivered pricing).
-    ///   Tax inputs          – jobsite ZIP, delivery preference
-    ///                          (drives tax-rate lookup and which totals
-    ///                          tax applies to).
+    ///   Tax inputs          – jobsite ZIP (drives tax-rate lookup).
+    /// FOB quotes pick up at the plant so they have no freight, no tax
+    /// and no required job site – the salesperson can still fill in a
+    /// job site address for lat/long heat-mapping, just not mandatory.
     ///
     /// On success the plugin also:
     ///   • copies eb_deliverypreference from the parent Project onto the
@@ -96,37 +99,48 @@ namespace Couture.Plugins.MultipleQuotes
 
             var missing = new List<string>();
 
-            // ── Freight inputs ──────────────────────────────────────────
-            var shippingRate = opp.GetAttributeValue<Money>(
-                SchemaConstants.Opportunity.ShippingRatePerHour);
-            if (shippingRate == null || shippingRate.Value <= 0)
-                missing.Add("Shipping Rate ($/hr)");
-
-            var cycleTime = opp.GetAttributeValue<int?>(
-                SchemaConstants.Opportunity.CycleTime);
-            if (cycleTime == null || cycleTime.Value <= 0)
-                missing.Add("Cycle Time (minutes)");
-
-            var loadTime = opp.GetAttributeValue<int?>(
-                SchemaConstants.Opportunity.LoadTime);
-            if (loadTime == null || loadTime.Value <= 0)
-                missing.Add("Load Time (minutes)");
-
-            var unloadTime = opp.GetAttributeValue<int?>(
-                SchemaConstants.Opportunity.UnloadTime);
-            if (unloadTime == null || unloadTime.Value <= 0)
-                missing.Add("Unload Time (minutes)");
-
-            // ── Tax inputs ─────────────────────────────────────────────
-            var jobsiteZip = opp.GetAttributeValue<string>(
-                SchemaConstants.Opportunity.JobsiteZip);
-            if (string.IsNullOrWhiteSpace(jobsiteZip))
-                missing.Add("Delivery ZIP Code");
-
+            // ── Delivery preference (always required) ───────────────────
             var deliveryPreference = opp.GetAttributeValue<OptionSetValue>(
                 SchemaConstants.Opportunity.DeliveryPreference);
             if (deliveryPreference == null)
                 missing.Add("Delivery Preference");
+
+            var jobsiteZip = opp.GetAttributeValue<string>(
+                SchemaConstants.Opportunity.JobsiteZip);
+
+            // Freight + tax fields only apply to Delivery and FOB+Delivery.
+            // FOB-only quotes have no freight, no tax and no required
+            // ZIP – the job site address stays optional.
+            var requiresFreight = deliveryPreference != null
+                && deliveryPreference.Value != SchemaConstants.DeliveryPreference.FOB;
+
+            if (requiresFreight)
+            {
+                // ── Freight inputs ──────────────────────────────────────
+                var shippingRate = opp.GetAttributeValue<Money>(
+                    SchemaConstants.Opportunity.ShippingRatePerHour);
+                if (shippingRate == null || shippingRate.Value <= 0)
+                    missing.Add("Shipping Rate ($/hr)");
+
+                var cycleTime = opp.GetAttributeValue<int?>(
+                    SchemaConstants.Opportunity.CycleTime);
+                if (cycleTime == null || cycleTime.Value <= 0)
+                    missing.Add("Cycle Time (minutes)");
+
+                var loadTime = opp.GetAttributeValue<int?>(
+                    SchemaConstants.Opportunity.LoadTime);
+                if (loadTime == null || loadTime.Value <= 0)
+                    missing.Add("Load Time (minutes)");
+
+                var unloadTime = opp.GetAttributeValue<int?>(
+                    SchemaConstants.Opportunity.UnloadTime);
+                if (unloadTime == null || unloadTime.Value <= 0)
+                    missing.Add("Unload Time (minutes)");
+
+                // ── Tax inputs ──────────────────────────────────────────
+                if (string.IsNullOrWhiteSpace(jobsiteZip))
+                    missing.Add("Delivery ZIP Code");
+            }
 
             if (missing.Count > 0)
             {
@@ -203,26 +217,33 @@ namespace Couture.Plugins.MultipleQuotes
             SeedPlaceholderCustomerAndPriceList(ctx, target);
 
             // ── Stamp tax rate on the new quote ─────────────────────────
-            // Pre-Validation runs before the platform writes the row, so
-            // mutating the Target stores the value in the initial insert
-            // with no extra Update call. A missing rate (zero match) is
-            // non-fatal here; CalculateTaxPlugin will fail loudly when the
-            // first quote detail tries to compute tax.
-            var taxService = new TaxRateService(ctx.Service, ctx.Tracing);
-            var rate = taxService.LookupCombinedRate(
-                SchemaConstants.TaxRate.MinnesotaStateName, jobsiteZip);
-            if (rate.HasValue && rate.Value > 0)
+            // Only meaningful for Delivery / FOB+Delivery quotes that
+            // have a ZIP. FOB-only quotes never owe tax so we skip the
+            // lookup entirely. A missing rate when ZIP is provided is
+            // non-fatal here; CalculateTaxPlugin will fail loudly when
+            // the first quote detail tries to compute tax.
+            if (!string.IsNullOrWhiteSpace(jobsiteZip))
             {
-                target[SchemaConstants.Quote.AppliedTaxRatePercent] =
-                    Math.Round(rate.Value * 100m, 4);
-                ctx.Tracing.Trace("Stamped tax rate {0}% on new quote.",
-                    target[SchemaConstants.Quote.AppliedTaxRatePercent]);
+                var taxService = new TaxRateService(ctx.Service, ctx.Tracing);
+                var rate = taxService.LookupCombinedRate(
+                    SchemaConstants.TaxRate.MinnesotaStateName, jobsiteZip);
+                if (rate.HasValue && rate.Value > 0)
+                {
+                    target[SchemaConstants.Quote.AppliedTaxRatePercent] =
+                        Math.Round(rate.Value * 100m, 4);
+                    ctx.Tracing.Trace("Stamped tax rate {0}% on new quote.",
+                        target[SchemaConstants.Quote.AppliedTaxRatePercent]);
+                }
+                else
+                {
+                    ctx.Tracing.Trace(
+                        "No matching eb_taxrate row for ZIP '{0}' – leaving rate unset on the new quote.",
+                        jobsiteZip);
+                }
             }
             else
             {
-                ctx.Tracing.Trace(
-                    "No matching eb_taxrate row for ZIP '{0}' – leaving rate unset on the new quote.",
-                    jobsiteZip);
+                ctx.Tracing.Trace("No ZIP on Project – skipping tax-rate stamp (FOB-only quote).");
             }
         }
 

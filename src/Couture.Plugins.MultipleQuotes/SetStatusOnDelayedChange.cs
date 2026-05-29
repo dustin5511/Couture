@@ -1,20 +1,24 @@
 using Couture.Plugins.MultipleQuotes.Constants;
+using Couture.Plugins.MultipleQuotes.Helpers;
 using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
 
 namespace Couture.Plugins.MultipleQuotes
 {
-    /// Synchronises the quote's status reason with the eb_delayed flag:
+    /// Synchronises the quote's status reason with the eb_delayed flag
+    /// AND cascades the delay onto the parent Project:
     ///
-    ///   eb_delayed = true  → State=Active (1), Status=Delayed (122050002)
-    ///   eb_delayed = false → State=Active (1), Status=InProgressActive (2)
-    ///                    or  State=Draft  (0), Status=InProgressDraft  (1)
-    ///                        depending on the quote's current state.
-    ///
-    /// This means the Delayed status is always visible in views and
-    /// dashboards, and the rollup can rely on statuscode alone rather
-    /// than the boolean.
+    ///   eb_delayed = true  → Quote: State=Active, Status=Delayed
+    ///                        Project: Status=OnHold (2),
+    ///                                 eb_pipelinestage=Delayed
+    ///   eb_delayed = false → Quote: restored to InProgress (Draft 1
+    ///                        or Active 2 depending on current state).
+    ///                        Project: if still in Open/OnHold, restored
+    ///                                 to InProgress (1) with
+    ///                                 eb_pipelinestage=Open. Skipped if
+    ///                                 project has been won, lost or
+    ///                                 manually moved off OnHold.
     ///
     /// Register on:
     ///   Message=Update, PrimaryEntity=quote, Stage=PostOperation (40)
@@ -47,6 +51,19 @@ namespace Couture.Plugins.MultipleQuotes
             }
 
             var delayed = target.GetAttributeValue<bool>(SchemaConstants.Quote.Delayed);
+            var helper = new QuoteOpportunityService(ctx.Service, ctx.Tracing);
+
+            // We need the parent opportunity (both branches cascade) and
+            // the current statecode (the un-delay branch uses it to pick
+            // the right InProgress status). Read both in a single hop.
+            var quoteSnapshot = ctx.Service.Retrieve(
+                SchemaConstants.Entities.Quote,
+                target.Id,
+                new ColumnSet(
+                    SchemaConstants.Quote.OpportunityId,
+                    SchemaConstants.Quote.StateCode));
+            var oppRef = quoteSnapshot.GetAttributeValue<EntityReference>(
+                SchemaConstants.Quote.OpportunityId);
 
             if (delayed)
             {
@@ -58,15 +75,15 @@ namespace Couture.Plugins.MultipleQuotes
                     State = new OptionSetValue(SchemaConstants.QuoteState.Active),
                     Status = new OptionSetValue(SchemaConstants.QuoteStatus.Delayed)
                 });
+
+                if (oppRef != null)
+                {
+                    helper.MarkProjectDelayed(oppRef.Id);
+                }
             }
             else
             {
-                var quote = ctx.Service.Retrieve(
-                    SchemaConstants.Entities.Quote,
-                    target.Id,
-                    new ColumnSet(SchemaConstants.Quote.StateCode));
-
-                var stateCode = quote.GetAttributeValue<OptionSetValue>(
+                var stateCode = quoteSnapshot.GetAttributeValue<OptionSetValue>(
                     SchemaConstants.Quote.StateCode);
                 var stateVal = stateCode?.Value ?? SchemaConstants.QuoteState.Active;
 
@@ -95,6 +112,11 @@ namespace Couture.Plugins.MultipleQuotes
                     State = new OptionSetValue(newState),
                     Status = new OptionSetValue(newStatus)
                 });
+
+                if (oppRef != null)
+                {
+                    helper.ClearProjectDelayed(oppRef.Id);
+                }
             }
         }
     }

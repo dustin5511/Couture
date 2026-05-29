@@ -83,13 +83,21 @@ namespace Couture.Plugins.MultipleQuotes
             // No open quotes remain → decide Won vs Lost for the opportunity.
             // A single Won quote is enough to close the opportunity as Won;
             // otherwise every remaining quote is Lost/Cancelled/Revised and
-            // the opportunity closes as Lost.
+            // the opportunity closes as Lost. Stamp the pipeline stage
+            // before the close request because the project becomes
+            // read-only once closed.
             if (everyQuote.Any(helper.IsQuoteWon))
             {
+                helper.SetProjectPipelineStage(
+                    opportunityRef.Id,
+                    SchemaConstants.ProjectPipelineStage.Won);
                 helper.CloseOpportunityAsWon(opportunityRef.Id);
             }
             else
             {
+                helper.SetProjectPipelineStage(
+                    opportunityRef.Id,
+                    SchemaConstants.ProjectPipelineStage.Lost);
                 helper.CloseOpportunityAsLost(opportunityRef.Id);
             }
         }

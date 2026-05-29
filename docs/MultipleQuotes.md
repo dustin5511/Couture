@@ -12,10 +12,11 @@ and will close the opportunity as Won the moment any quote is won. The
   are Lost/Cancelled → opportunity is closed Lost.
 * A money field on the opportunity always reflects the sum of `eb_fobtotal`
   (base product revenue – no delivery, no tax) for every quote currently in
-  Active or Won state. Quotes with status reason `Delayed` (122050002) are
-  excluded from this sum even when their state is Active. Toggling
-  `eb_delayed` automatically sets the status reason via
-  `SetStatusOnDelayedChange`.
+  Active or Won state. **Delayed quotes are included** so the pipeline-stage
+  chart can surface how much revenue is parked there. Toggling `eb_delayed`
+  sets the quote's status reason to `Delayed` (122050002) via
+  `SetStatusOnDelayedChange`, and also cascades the parent Project to
+  status `OnHold` with `eb_pipelinestage = Delayed` (122050001).
 * The user can still close the opportunity manually – the plugin never
   overrides a state that was already set to Won/Lost before we run.
 
@@ -38,6 +39,7 @@ quote-creation validation / tax calculation pipeline:
 | `eb_jobsitestate`                  | Text      | Copied onto Quote `shipto_stateorprovince` at quote Create.           |
 | `eb_jobsitecountry`                | Text      | Copied onto Quote `shipto_country` at quote Create.                   |
 | `eb_customerjobprojectnumber`      | Text      | Customer's internal job/project reference. Copied onto Quote `eb_customerjobprojectnumber` at quote Create. |
+| `eb_pipelinestage`                 | Choice    | Pipeline stage cascaded from child quotes. Values: `Open` (122050000), `Delayed` (122050001), `Won` (122050002), `Lost` (122050003). Driven by `SetStatusOnDelayedChange` (Delayed), `QuoteClosePlugin` (Won / Lost) and `QuoteWinPlugin` (Won on last-quote win). |
 
 ### Quote
 
@@ -135,12 +137,16 @@ Notes:
 
 `ValidateFreightBeforeQuoteCreate` (PreValidation, Create on quote) reads
 the parent Opportunity and throws `InvalidPluginExecutionException` with
-a single bulleted error message listing every missing field across two
-categories:
+a single bulleted error message listing every missing field. The
+required set depends on the project's delivery preference:
 
-- Freight inputs: `eb_shippingrateperhour`, `eb_cycletime`, `eb_loadtime`,
-  `eb_unloadtime`.
-- Tax inputs: `eb_jobsitezip`, `eb_deliverypreference`.
+- **All preferences require** `eb_deliverypreference` itself.
+- **Delivery / FOB+Delivery only** also require freight inputs
+  (`eb_shippingrateperhour`, `eb_cycletime`, `eb_loadtime`,
+  `eb_unloadtime`) and `eb_jobsitezip`.
+- **FOB-only** has no other required fields — the salesperson can
+  still fill in a job site address if available (the lat/long feeds
+  heat-mapping reports), it just isn't mandatory.
 
 The error surfaces on the form so the user can correct the Project record
 without leaving the page.

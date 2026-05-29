@@ -157,17 +157,11 @@ namespace Couture.Plugins.MultipleQuotes.Helpers
                     continue;
                 }
 
-                // Delayed quotes have status reason 122050002 under the
-                // Active state. They don't count toward the project's
-                // expected revenue figure.
-                var status = quote.GetAttributeValue<OptionSetValue>(
-                    SchemaConstants.Quote.StatusCode);
-                if (status != null
-                    && status.Value == SchemaConstants.QuoteStatus.Delayed)
-                {
-                    continue;
-                }
-
+                // Delayed quotes ARE included in the rollup so the
+                // project's pipeline-stage chart can show how much
+                // revenue is parked in the Delayed slice. The visible
+                // statuscode is enough to surface "delayed" without
+                // hiding the dollar amount.
                 var amount = quote.GetAttributeValue<Money>(SchemaConstants.Quote.FobTotal);
                 if (amount != null)
                 {
@@ -187,6 +181,92 @@ namespace Couture.Plugins.MultipleQuotes.Helpers
 
             _tracing.Trace("Opportunity {0} rollup refreshed to {1}",
                 opportunityId, total);
+        }
+
+        /// Marks the project as On Hold (statuscode = 2) with the
+        /// Delayed pipeline stage. Fired when any child quote toggles
+        /// eb_delayed = true.
+        public void MarkProjectDelayed(Guid opportunityId)
+        {
+            _tracing.Trace("Marking opportunity {0} as On Hold / Delayed.", opportunityId);
+            var request = new SetStateRequest
+            {
+                EntityMoniker = new EntityReference(
+                    SchemaConstants.Entities.Opportunity, opportunityId),
+                State = new OptionSetValue(SchemaConstants.OpportunityState.Open),
+                Status = new OptionSetValue(SchemaConstants.OpportunityStatus.OnHold)
+            };
+            _service.Execute(request);
+
+            var update = new Entity(SchemaConstants.Entities.Opportunity, opportunityId)
+            {
+                [SchemaConstants.Opportunity.PipelineStage] = new OptionSetValue(
+                    SchemaConstants.ProjectPipelineStage.Delayed)
+            };
+            _service.Update(update);
+        }
+
+        /// Reverts a previously-delayed project back to In Progress with
+        /// the Open pipeline stage. Only acts if the project is still in
+        /// the Open state with statuscode = OnHold – we don't trample
+        /// over a project that has since been won, lost or manually
+        /// moved into a different stage.
+        public void ClearProjectDelayed(Guid opportunityId)
+        {
+            var opp = _service.Retrieve(
+                SchemaConstants.Entities.Opportunity,
+                opportunityId,
+                new ColumnSet(
+                    SchemaConstants.Opportunity.StateCode,
+                    SchemaConstants.Opportunity.StatusCode));
+
+            var state = opp.GetAttributeValue<OptionSetValue>(
+                SchemaConstants.Opportunity.StateCode);
+            var status = opp.GetAttributeValue<OptionSetValue>(
+                SchemaConstants.Opportunity.StatusCode);
+
+            if (state == null || state.Value != SchemaConstants.OpportunityState.Open
+                || status == null || status.Value != SchemaConstants.OpportunityStatus.OnHold)
+            {
+                _tracing.Trace(
+                    "Opportunity {0} is not in Open/OnHold (state={1}, status={2}) – " +
+                    "skipping delayed-clear.",
+                    opportunityId, state?.Value, status?.Value);
+                return;
+            }
+
+            _tracing.Trace("Clearing delayed state on opportunity {0}.", opportunityId);
+            var request = new SetStateRequest
+            {
+                EntityMoniker = new EntityReference(
+                    SchemaConstants.Entities.Opportunity, opportunityId),
+                State = new OptionSetValue(SchemaConstants.OpportunityState.Open),
+                Status = new OptionSetValue(SchemaConstants.OpportunityStatus.InProgress)
+            };
+            _service.Execute(request);
+
+            var update = new Entity(SchemaConstants.Entities.Opportunity, opportunityId)
+            {
+                [SchemaConstants.Opportunity.PipelineStage] = new OptionSetValue(
+                    SchemaConstants.ProjectPipelineStage.Open)
+            };
+            _service.Update(update);
+        }
+
+        /// Stamps the project's eb_pipelinestage in a plain Update.
+        /// Used by the win/close cascade to set Won / Lost on the
+        /// project before the platform's CloseOpportunity request
+        /// freezes the record.
+        public void SetProjectPipelineStage(Guid opportunityId, int pipelineStageValue)
+        {
+            _tracing.Trace("Setting opportunity {0} pipelinestage = {1}.",
+                opportunityId, pipelineStageValue);
+            var update = new Entity(SchemaConstants.Entities.Opportunity, opportunityId)
+            {
+                [SchemaConstants.Opportunity.PipelineStage] = new OptionSetValue(
+                    pipelineStageValue)
+            };
+            _service.Update(update);
         }
     }
 }

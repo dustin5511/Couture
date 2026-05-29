@@ -73,6 +73,15 @@ namespace Couture.Plugins.MultipleQuotes
             if (stillOpen.Count == 0)
             {
                 ctx.Tracing.Trace("No other open quotes – platform's default Win cascade is correct.");
+
+                // This is the last open quote being won → the platform
+                // will close the project as Won in a moment. Stamp the
+                // pipeline stage before that happens; once the project
+                // is Won, the record is read-only and we can't write to
+                // it without reopening.
+                helper.SetProjectPipelineStage(
+                    opportunityRef.Id,
+                    SchemaConstants.ProjectPipelineStage.Won);
                 return;
             }
 

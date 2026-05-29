@@ -183,6 +183,12 @@ namespace Couture.Plugins.MultipleQuotes.Constants
             /// Customer's internal job / project reference number.
             /// Copied to the new Quote at Create.
             public const string CustomerJobProjectNumber = "eb_customerjobprojectnumber";
+
+            /// Custom pipeline-stage choice on the Project. Driven by the
+            /// quote cascade: a delayed quote pushes the project to
+            /// Delayed; the last quote winning / losing pushes it to Won
+            /// / Lost. See ProjectPipelineStage for value mapping.
+            public const string PipelineStage = "eb_pipelinestage";
         }
 
         internal static class QuoteDetail
@@ -241,6 +247,18 @@ namespace Couture.Plugins.MultipleQuotes.Constants
             /// because that's what the spreadsheet load uses; the literal
             /// must match exactly (case-sensitive).
             public const string MinnesotaStateName = "MN";
+        }
+
+        /// Option-set values for Opportunity.eb_pipelinestage. The Open
+        /// value is assumed to be 122050000 (the canonical first slot in
+        /// a Kraemer choice set) – correct the constant if your column
+        /// uses a different value.
+        internal static class ProjectPipelineStage
+        {
+            public const int Open = 122050000;
+            public const int Delayed = 122050001;
+            public const int Won = 122050002;
+            public const int Lost = 122050003;
         }
 
         /// Option-set values for Opportunity.eb_deliverypreference.

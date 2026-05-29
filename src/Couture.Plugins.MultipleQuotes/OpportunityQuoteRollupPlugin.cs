@@ -9,8 +9,9 @@ namespace Couture.Plugins.MultipleQuotes
     /// sync. The rollup sums each active/won quote's eb_fobtotal (product
     /// prices × qty, no delivery, no tax) – Kraemer wants the revenue
     /// number to reflect the base product value regardless of delivery
-    /// preference. Quotes flagged eb_delayed = true are excluded even when
-    /// they're Active/Won. Delta-trigger only: we refresh when eb_fobtotal,
+    /// preference. Delayed quotes ARE included in the sum so the
+    /// pipeline-stage chart can show how much revenue is parked in the
+    /// Delayed slice. Delta-trigger only: we refresh when eb_fobtotal,
     /// state, eb_delayed or the parent opportunity change – not on every
     /// Update of an unrelated field.
     ///
