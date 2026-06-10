@@ -155,6 +155,7 @@ namespace Couture.Plugins.MultipleQuotes.Constants
         internal static class Opportunity
         {
             public const string Id = "opportunityid";
+            public const string Name = "name";
             public const string StateCode = "statecode";
             public const string StatusCode = "statuscode";
 

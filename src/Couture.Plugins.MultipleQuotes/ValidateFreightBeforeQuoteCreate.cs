@@ -98,7 +98,8 @@ namespace Couture.Plugins.MultipleQuotes
                     SchemaConstants.Opportunity.JobsiteCity,
                     SchemaConstants.Opportunity.JobsiteState,
                     SchemaConstants.Opportunity.JobsiteCountry,
-                    SchemaConstants.Opportunity.CustomerJobProjectNumber));
+                    SchemaConstants.Opportunity.CustomerJobProjectNumber,
+                    SchemaConstants.Opportunity.Name));
 
             var missing = new List<string>();
 
@@ -196,6 +197,15 @@ namespace Couture.Plugins.MultipleQuotes
             SeedStringField(target, SchemaConstants.Quote.ShipToCountry,
                 opp.GetAttributeValue<string>(SchemaConstants.Opportunity.JobsiteCountry));
             ctx.Tracing.Trace("Seeded shipto_* fields from Project job-site address.");
+
+            // ── Seed quote name from the project's name ─────────────────
+            // Quote.name is the OOB primary name (already required by the
+            // platform). Defaulting it from the parent Project's name
+            // means the Word template's Project Name slot — which binds
+            // to `name` — fills in automatically. User can override on
+            // the quote afterward.
+            SeedStringField(target, SchemaConstants.Quote.Name,
+                opp.GetAttributeValue<string>(SchemaConstants.Opportunity.Name));
 
             // ── Seed customer's job / project number ────────────────────
             SeedStringField(target, SchemaConstants.Quote.CustomerJobProjectNumber,
