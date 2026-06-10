@@ -5,11 +5,18 @@ using Microsoft.Xrm.Sdk.Query;
 
 namespace Couture.Plugins.MultipleQuotes
 {
-    /// When freight inputs change on a Quote (shipping rate, cycle time,
-    /// load time, unload time), this plugin recalculates the cached
-    /// trailer / straight-truck per-ton rates + total trip minutes on
-    /// the same Quote, then re-fires every child Quote Product so the
-    /// delivered prices and tax pick up the new values.
+    /// Drives the per-quote freight cascade. Two scenarios it handles:
+    ///
+    ///   • User changes a raw input (shipping rate, cycle time, load
+    ///     time, unload time) → recalculate the cached trailer /
+    ///     straight-truck per-ton rates + total trip minutes on the
+    ///     Quote, then re-fire every child Quote Product so delivered
+    ///     prices and tax pick up the new values.
+    ///
+    ///   • User manually overrides a calculated rate (eb_trailerrateton
+    ///     or eb_straighttruckrateton) → skip the recalc so the manual
+    ///     value is preserved, then re-fire every child line so
+    ///     delivered prices reflect the manual rate.
     ///
     /// Replaces the old RecalcDeliveryOnProjectChange that cascaded
     /// project freight changes across all sibling quotes – freight is
@@ -18,7 +25,8 @@ namespace Couture.Plugins.MultipleQuotes
     /// Register on:
     ///   Message=Update, PrimaryEntity=quote, Stage=PostOperation (40)
     ///   Filter attributes: eb_shippingrateperhour, eb_cycletime,
-    ///                      eb_loadtime, eb_unloadtime
+    ///                      eb_loadtime, eb_unloadtime,
+    ///                      eb_trailerrateton, eb_straighttruckrateton
     ///   PostImage "PostImage" with columns:
     ///     eb_shippingrateperhour, eb_cycletime, eb_loadtime, eb_unloadtime
     public sealed class RecalcQuoteOnFreightChange : BasePlugin
@@ -28,13 +36,14 @@ namespace Couture.Plugins.MultipleQuotes
             ctx.Tracing.Trace("RecalcQuoteOnFreightChange started. Depth={0}",
                 ctx.Execution.Depth);
 
-            // We write back to the same Quote (trailerrateton etc.) which
-            // re-fires this plugin. The filter attributes prevent that
-            // (we write rate fields, not input fields), but depth guard
-            // is the safety net.
-            if (ctx.Execution.Depth > 3)
+            // Self-recursion guard. When this plugin runs at depth 1 and
+            // recalculates rates, it writes them back to the Quote – that
+            // write re-fires this plugin at depth 2 with the rate fields
+            // in Target. We've already done the cascade in the depth-1
+            // pass, so bail to avoid duplicate work and an infinite loop.
+            if (ctx.Execution.Depth > 1)
             {
-                ctx.Tracing.Trace("Depth > 3 – exiting to prevent recursion.");
+                ctx.Tracing.Trace("Depth > 1 – assuming self-triggered re-fire and exiting.");
                 return;
             }
 
@@ -46,9 +55,34 @@ namespace Couture.Plugins.MultipleQuotes
             }
 
             var quoteId = target.Id;
+
+            // Decide which branch to take based on what's in Target.
+            // Raw inputs win – if any are present, we recalculate rates
+            // (the user could legitimately change a raw input AND a rate
+            // in the same save; raw inputs override).
+            var rawInputChanged =
+                target.Contains(SchemaConstants.Quote.ShippingRatePerHour)
+                || target.Contains(SchemaConstants.Quote.CycleTime)
+                || target.Contains(SchemaConstants.Quote.LoadTime)
+                || target.Contains(SchemaConstants.Quote.UnloadTime);
+
+            if (rawInputChanged)
+            {
+                RecalculateRatesAndCascade(ctx, quoteId);
+            }
+            else
+            {
+                ctx.Tracing.Trace(
+                    "Only rate fields in Target – preserving manual override, " +
+                    "cascading to line items.");
+                CascadeToLines(ctx, quoteId);
+            }
+        }
+
+        private static void RecalculateRatesAndCascade(PluginContext ctx, Guid quoteId)
+        {
             var quote = ResolveQuote(ctx, quoteId);
 
-            // ── Read freight inputs ──────────────────────────────────────
             var shipping = quote.GetAttributeValue<Money>(
                 SchemaConstants.Quote.ShippingRatePerHour);
             var cycle = quote.GetAttributeValue<int?>(
@@ -71,6 +105,7 @@ namespace Couture.Plugins.MultipleQuotes
                     [SchemaConstants.Quote.TotalTripMinutes] = null
                 };
                 ctx.Service.Update(clear);
+                CascadeToLines(ctx, quoteId);
                 return;
             }
 
@@ -90,7 +125,6 @@ namespace Couture.Plugins.MultipleQuotes
                 "Calculated – TotalMinutes={0}, Trailer={1}/ton, Straight={2}/ton",
                 totalMinutes, trailerRate, straightRate);
 
-            // ── Update the Quote with calculated rates ───────────────────
             var updateQuote = new Entity(SchemaConstants.Entities.Quote, quoteId)
             {
                 [SchemaConstants.Quote.TrailerRatePerTon] = new Money(trailerRate),
@@ -99,11 +133,16 @@ namespace Couture.Plugins.MultipleQuotes
             };
             ctx.Service.Update(updateQuote);
 
-            // ── Touch each child line to re-fire delivered-price calc ────
-            // We don't recompute prices inline – we write quantity back to
-            // its current value so CalculateDeliveryPricingPlugin's
-            // filter trips and re-runs with the new freight rates. That
-            // cascades into tax + rollup automatically.
+            CascadeToLines(ctx, quoteId);
+        }
+
+        /// Touches each child Quote Product so CalculateDeliveryPricingPlugin
+        /// re-fires with the latest freight rates on the parent Quote.
+        /// Writing the line's current Quantity back to itself is the
+        /// cheapest way to trip the downstream filter without
+        /// duplicating its math here.
+        private static void CascadeToLines(PluginContext ctx, Guid quoteId)
+        {
             var lines = ctx.Service.RetrieveMultiple(
                 new QueryExpression(SchemaConstants.Entities.QuoteDetail)
                 {
