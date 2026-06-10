@@ -117,7 +117,7 @@ All steps are **synchronous** and run as the calling user.
 | 10 | `CalculateDeliveryPricingPlugin`      | Update  | quotedetail    | PostOperation 40  | 2     | priceperunit, quantity, eb_isincomingmaterial                                                                  | PostImage `PostImage`: priceperunit, quantity, eb_isincomingmaterial, quoteid, productid                                                     |
 | 11 | `CalculateTaxPlugin`                  | Create  | quotedetail    | PostOperation 50  | –     | –                                                                                                              | PostImage `PostImage`: priceperunit, quantity, eb_isincomingmaterial, quoteid, eb_deliveredpricetrailer, eb_deliveredpricestraight           |
 | 12 | `CalculateTaxPlugin`                  | Update  | quotedetail    | PostOperation 50  | –     | priceperunit, quantity, eb_isincomingmaterial, eb_deliveredpricetrailer, eb_deliveredpricestraight              | PostImage `PostImage`: priceperunit, quantity, eb_isincomingmaterial, quoteid, eb_deliveredpricetrailer, eb_deliveredpricestraight           |
-| 13 | `RecalcDeliveryOnProjectChange`       | Update  | opportunity    | PostOperation 40  | –     | eb_shippingrateperhour, eb_cycletime, eb_loadtime, eb_unloadtime                                               | PostImage `PostImage`: eb_shippingrateperhour, eb_cycletime, eb_loadtime, eb_unloadtime                                                      |
+| 13 | `RecalcQuoteOnFreightChange`          | Update  | quote          | PostOperation 40  | –     | eb_shippingrateperhour, eb_cycletime, eb_loadtime, eb_unloadtime                                               | PostImage `PostImage`: eb_shippingrateperhour, eb_cycletime, eb_loadtime, eb_unloadtime                                                      |
 | 14 | `RecalcOnQuoteDeliveryPreferenceChange` | Update | quote        | PostOperation 40  | –     | eb_deliverypreference                                                                                          | –                                                                                                                                            |
 | 15 | `SyncPriceListOnCustomerChange`       | Update  | quote          | PostOperation 40  | –     | customerid                                                                                                     | –                                                                                                                                            |
 | 16 | `SetStatusOnDelayedChange`            | Update  | quote          | PostOperation 40  | –     | eb_delayed                                                                                                     | –                                                                                                                                            |
@@ -127,7 +127,7 @@ Notes:
 - `ValidateFreightBeforeQuoteCreate` runs at **PreValidation (10)** rather than PreOperation. PreValidation fires *outside* the database transaction so a thrown `InvalidPluginExecutionException` is rolled back instantly with a clean error dialog and no half-completed work.
 - `PopulateIncomingMaterialFlag` runs at **PreOperation (20)** with Execution Order 1 on `quotedetail` Create — it mutates the Target directly (no extra Update) so the platform's insert carries the correct flag, and `CalculateDeliveryPricingPlugin` at rank 2 sees it.
 - `CalculateDeliveryPricingPlugin` writes per-line delivered prices, extended amounts, **and** rolls up the five Quote-level totals (FOB, delivered trailer/straight, tax trailer/straight). The rollup includes the per-line tax fields written by `CalculateTaxPlugin` at rank 50 on subsequent passes.
-- `RecalcDeliveryOnProjectChange` cascades opportunity freight-input edits to every active quote underneath, then runs the same 5-field rollup so the quote-level totals stay consistent.
+- `RecalcQuoteOnFreightChange` recalculates the trailer / straight-truck per-ton rates + total trip minutes on the Quote whenever the freight inputs change, then re-fires every child line item so delivered prices, tax and the rollup all pick up the new values. Freight is per-quote — no cross-quote cascade and no project-side cascade.
 - `RecalcOnQuoteDeliveryPreferenceChange` re-fires the line-level tax + rollup when the user edits `eb_deliverypreference` on a quote. It touches each child `quotedetail` by writing its current quantity back, which trips the filter attribute on the downstream pricing plugins so they re-read the (now updated) preference from the quote and produce new tax amounts and totals.
 - `SyncPriceListOnCustomerChange` swaps `pricelevelid` to the new customer's `defaultpricelevelid` whenever `customerid` changes on a quote. By design it does **not** re-price existing line items — the user manually adjusts those if needed. Account-only (rejects Contact-typed customers); skips Won/Closed quotes.
 
@@ -218,9 +218,9 @@ fail a save than silently store $0 tax on a six-figure order.
 ### Aggregating Quote totals
 
 `CalculateDeliveryPricingPlugin.RollUpQuoteTotals` runs at the end of
-every quote-detail Create / Update (and is also called by
-`RecalcDeliveryOnProjectChange` when freight inputs change on the
-opportunity). It rewrites all five Quote-level totals:
+every quote-detail Create / Update (and is reached transitively when
+`RecalcQuoteOnFreightChange` touches each child line to re-fire the
+delivered-price calc). It rewrites all five Quote-level totals:
 
 ```
 eb_fobtotal               = Σ priceperunit × quantity                  (always)

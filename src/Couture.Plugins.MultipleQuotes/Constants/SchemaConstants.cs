@@ -107,6 +107,20 @@ namespace Couture.Plugins.MultipleQuotes.Constants
             // Customer's internal job / project reference, copied from
             // the parent Opportunity at Create.
             public const string CustomerJobProjectNumber = "eb_customerjobprojectnumber";
+
+            // Per-quote freight inputs and cached calculated rates.
+            // Seeded from the parent Project at quote Create by
+            // ValidateFreightBeforeQuoteCreate; once on the Quote the
+            // user can override per-quote without affecting siblings or
+            // the project. CalculateDeliveryPricingPlugin and
+            // RecalcQuoteOnFreightChange both read these from the Quote.
+            public const string ShippingRatePerHour = "eb_shippingrateperhour";
+            public const string CycleTime = "eb_cycletime";
+            public const string LoadTime = "eb_loadtime";
+            public const string UnloadTime = "eb_unloadtime";
+            public const string TrailerRatePerTon = "eb_trailerrateton";
+            public const string StraightTruckRatePerTon = "eb_straighttruckrateton";
+            public const string TotalTripMinutes = "eb_totaltripminutes";
         }
 
         internal static class SystemUser

@@ -100,31 +100,22 @@ namespace Couture.Plugins.MultipleQuotes
                 SchemaConstants.QuoteDetail.Quantity) ?? 0m;
             ctx.Tracing.Trace("Price Per Unit={0}, Quantity={1}", ppu.Value, quantity);
 
+            // Freight inputs and pre-calculated rates live on the Quote
+            // itself now – each quote owns its own values so the user can
+            // adjust freight per-quote without disturbing siblings or
+            // the project.
             var quote = ctx.Service.Retrieve(
                 SchemaConstants.Entities.Quote,
                 quoteRef.Id,
-                new ColumnSet(SchemaConstants.Quote.OpportunityId));
-
-            var oppRef = quote.GetAttributeValue<EntityReference>(
-                SchemaConstants.Quote.OpportunityId);
-            if (oppRef == null)
-            {
-                ctx.Tracing.Trace("No parent Opportunity on Quote – exiting.");
-                return;
-            }
-
-            var opportunity = ctx.Service.Retrieve(
-                SchemaConstants.Entities.Opportunity,
-                oppRef.Id,
                 new ColumnSet(
-                    SchemaConstants.Opportunity.ShippingRatePerHour,
-                    SchemaConstants.Opportunity.CycleTime,
-                    SchemaConstants.Opportunity.LoadTime,
-                    SchemaConstants.Opportunity.UnloadTime,
-                    SchemaConstants.Opportunity.TrailerRatePerTon,
-                    SchemaConstants.Opportunity.StraightTruckRatePerTon));
+                    SchemaConstants.Quote.ShippingRatePerHour,
+                    SchemaConstants.Quote.CycleTime,
+                    SchemaConstants.Quote.LoadTime,
+                    SchemaConstants.Quote.UnloadTime,
+                    SchemaConstants.Quote.TrailerRatePerTon,
+                    SchemaConstants.Quote.StraightTruckRatePerTon));
 
-            if (!TryResolveFreightRates(ctx, opportunity, out var trailerRate, out var straightRate))
+            if (!TryResolveFreightRates(ctx, quote, out var trailerRate, out var straightRate))
             {
                 return;
             }
@@ -180,20 +171,21 @@ namespace Couture.Plugins.MultipleQuotes
                     SchemaConstants.QuoteDetail.ProductId));
         }
 
-        /// Prefer the rates that already live on the Opportunity (a business
-        /// rule or rollup may have populated them); otherwise derive them
-        /// from the raw shipping inputs. Returns false when neither path can
-        /// produce usable numbers, so the caller can bail out cleanly.
+        /// Prefer the rates that already live on the Quote
+        /// (RecalcQuoteOnFreightChange populates them from raw freight
+        /// inputs); otherwise derive them from the raw shipping inputs.
+        /// Returns false when neither path can produce usable numbers,
+        /// so the caller can bail out cleanly.
         private static bool TryResolveFreightRates(
             PluginContext ctx,
-            Entity opportunity,
+            Entity quote,
             out decimal trailerRate,
             out decimal straightRate)
         {
-            var trailerMoney = opportunity.GetAttributeValue<Money>(
-                SchemaConstants.Opportunity.TrailerRatePerTon);
-            var straightMoney = opportunity.GetAttributeValue<Money>(
-                SchemaConstants.Opportunity.StraightTruckRatePerTon);
+            var trailerMoney = quote.GetAttributeValue<Money>(
+                SchemaConstants.Quote.TrailerRatePerTon);
+            var straightMoney = quote.GetAttributeValue<Money>(
+                SchemaConstants.Quote.StraightTruckRatePerTon);
 
             if (trailerMoney != null && trailerMoney.Value > 0
                 && straightMoney != null && straightMoney.Value > 0)
@@ -205,14 +197,14 @@ namespace Couture.Plugins.MultipleQuotes
                 return true;
             }
 
-            var shipping = opportunity.GetAttributeValue<Money>(
-                SchemaConstants.Opportunity.ShippingRatePerHour);
-            var cycle = opportunity.GetAttributeValue<int?>(
-                SchemaConstants.Opportunity.CycleTime);
-            var load = opportunity.GetAttributeValue<int?>(
-                SchemaConstants.Opportunity.LoadTime);
-            var unload = opportunity.GetAttributeValue<int?>(
-                SchemaConstants.Opportunity.UnloadTime);
+            var shipping = quote.GetAttributeValue<Money>(
+                SchemaConstants.Quote.ShippingRatePerHour);
+            var cycle = quote.GetAttributeValue<int?>(
+                SchemaConstants.Quote.CycleTime);
+            var load = quote.GetAttributeValue<int?>(
+                SchemaConstants.Quote.LoadTime);
+            var unload = quote.GetAttributeValue<int?>(
+                SchemaConstants.Quote.UnloadTime);
 
             if (shipping == null || shipping.Value <= 0)
             {

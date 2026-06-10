@@ -88,6 +88,9 @@ namespace Couture.Plugins.MultipleQuotes
                     SchemaConstants.Opportunity.CycleTime,
                     SchemaConstants.Opportunity.LoadTime,
                     SchemaConstants.Opportunity.UnloadTime,
+                    SchemaConstants.Opportunity.TrailerRatePerTon,
+                    SchemaConstants.Opportunity.StraightTruckRatePerTon,
+                    SchemaConstants.Opportunity.TotalTripMinutes,
                     SchemaConstants.Opportunity.JobsiteZip,
                     SchemaConstants.Opportunity.DeliveryPreference,
                     SchemaConstants.Opportunity.JobsiteStreet1,
@@ -199,6 +202,26 @@ namespace Couture.Plugins.MultipleQuotes
                 opp.GetAttributeValue<string>(
                     SchemaConstants.Opportunity.CustomerJobProjectNumber));
 
+            // ── Seed freight inputs onto the new quote ─────────────────
+            // Once on the quote, the user can change any of these and
+            // CalculateDeliveryPricingPlugin (via RecalcQuoteOnFreightChange)
+            // re-prices the line items. The project's values are NOT
+            // cascaded after Create – each quote owns its own set.
+            SeedMoneyField(target, SchemaConstants.Quote.ShippingRatePerHour,
+                opp.GetAttributeValue<Money>(SchemaConstants.Opportunity.ShippingRatePerHour));
+            SeedIntField(target, SchemaConstants.Quote.CycleTime,
+                opp.GetAttributeValue<int?>(SchemaConstants.Opportunity.CycleTime));
+            SeedIntField(target, SchemaConstants.Quote.LoadTime,
+                opp.GetAttributeValue<int?>(SchemaConstants.Opportunity.LoadTime));
+            SeedIntField(target, SchemaConstants.Quote.UnloadTime,
+                opp.GetAttributeValue<int?>(SchemaConstants.Opportunity.UnloadTime));
+            SeedMoneyField(target, SchemaConstants.Quote.TrailerRatePerTon,
+                opp.GetAttributeValue<Money>(SchemaConstants.Opportunity.TrailerRatePerTon));
+            SeedMoneyField(target, SchemaConstants.Quote.StraightTruckRatePerTon,
+                opp.GetAttributeValue<Money>(SchemaConstants.Opportunity.StraightTruckRatePerTon));
+            SeedIntField(target, SchemaConstants.Quote.TotalTripMinutes,
+                opp.GetAttributeValue<int?>(SchemaConstants.Opportunity.TotalTripMinutes));
+
             // ── Stamp owner contact details ─────────────────────────────
             // Word Template XML mapper can't traverse ownerid → systemuser,
             // so denormalize the owning user's contact info onto the
@@ -258,6 +281,20 @@ namespace Couture.Plugins.MultipleQuotes
             if (target.Contains(fieldName)) return;
             if (string.IsNullOrWhiteSpace(value)) return;
             target[fieldName] = value;
+        }
+
+        private static void SeedMoneyField(Entity target, string fieldName, Money value)
+        {
+            if (target.Contains(fieldName)) return;
+            if (value == null) return;
+            target[fieldName] = value;
+        }
+
+        private static void SeedIntField(Entity target, string fieldName, int? value)
+        {
+            if (target.Contains(fieldName)) return;
+            if (!value.HasValue) return;
+            target[fieldName] = value.Value;
         }
 
         /// Resolves the user who will own the new Quote and copies their
