@@ -5,23 +5,25 @@ using Microsoft.Xrm.Sdk.Query;
 namespace Couture.Plugins.MultipleQuotes
 {
     /// Re-fires the per-line tax + delivered-total calculations whenever
-    /// the user changes eb_deliverypreference on a Quote. The preference
-    /// is seeded from the parent Project on Create (see
-    /// ValidateFreightBeforeQuoteCreate), but each quote owns the value
-    /// from that point on so the user can model a different scenario
-    /// (FOB vs Delivery vs FOB and Delivery) on a per-quote basis.
+    /// the user changes eb_deliverypreference OR the ship-to ZIP on a
+    /// Quote. The preference is seeded from the parent Project on Create
+    /// (see ValidateFreightBeforeQuoteCreate), but each quote owns the
+    /// value from that point on so the user can model a different
+    /// scenario (FOB vs Delivery vs FOB and Delivery) on a per-quote
+    /// basis. The ship-to ZIP drives the tax-rate lookup, so changing
+    /// the job site on a Delivery quote re-prices the tax too.
     ///
     /// We don't recompute anything in-process; instead we touch each
     /// child QuoteDetail by writing its current Quantity back to itself.
     /// That re-fires CalculateDeliveryPricingPlugin and CalculateTaxPlugin
-    /// (both filter on `quantity`), which read the updated preference off
-    /// the parent Quote and produce the right line-level tax amounts.
-    /// CalculateDeliveryPricingPlugin's rollup then writes the new quote
-    /// totals.
+    /// (both filter on `quantity`), which read the updated preference and
+    /// ZIP off the parent Quote and produce the right line-level tax
+    /// amounts. CalculateDeliveryPricingPlugin's rollup then writes the
+    /// new quote totals.
     ///
     /// Register on:
     ///   Message=Update, PrimaryEntity=quote, Stage=PostOperation (40)
-    ///   Filter attributes: eb_deliverypreference
+    ///   Filter attributes: eb_deliverypreference, shipto_postalcode
     public sealed class RecalcOnQuoteDeliveryPreferenceChange : BasePlugin
     {
         protected override void ExecuteInternal(PluginContext ctx)

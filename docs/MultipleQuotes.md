@@ -118,7 +118,7 @@ All steps are **synchronous** and run as the calling user.
 | 11 | `CalculateTaxPlugin`                  | Create  | quotedetail    | PostOperation 50  | –     | –                                                                                                              | PostImage `PostImage`: priceperunit, quantity, eb_isincomingmaterial, quoteid, eb_deliveredpricetrailer, eb_deliveredpricestraight           |
 | 12 | `CalculateTaxPlugin`                  | Update  | quotedetail    | PostOperation 50  | –     | priceperunit, quantity, eb_isincomingmaterial, eb_deliveredpricetrailer, eb_deliveredpricestraight              | PostImage `PostImage`: priceperunit, quantity, eb_isincomingmaterial, quoteid, eb_deliveredpricetrailer, eb_deliveredpricestraight           |
 | 13 | `RecalcQuoteOnFreightChange`          | Update  | quote          | PostOperation 40  | –     | eb_shippingrateperhour, eb_cycletime, eb_loadtime, eb_unloadtime, eb_trailerrateton, eb_straighttruckrateton   | PostImage `PostImage`: eb_shippingrateperhour, eb_cycletime, eb_loadtime, eb_unloadtime                                                      |
-| 14 | `RecalcOnQuoteDeliveryPreferenceChange` | Update | quote        | PostOperation 40  | –     | eb_deliverypreference                                                                                          | –                                                                                                                                            |
+| 14 | `RecalcOnQuoteDeliveryPreferenceChange` | Update | quote        | PostOperation 40  | –     | eb_deliverypreference, shipto_postalcode                                                                       | –                                                                                                                                            |
 | 15 | `SyncPriceListOnCustomerChange`       | Update  | quote          | PostOperation 40  | –     | customerid                                                                                                     | –                                                                                                                                            |
 | 16 | `SetStatusOnDelayedChange`            | Update  | quote          | PostOperation 40  | –     | eb_delayed                                                                                                     | –                                                                                                                                            |
 
@@ -128,7 +128,7 @@ Notes:
 - `PopulateIncomingMaterialFlag` runs at **PreOperation (20)** with Execution Order 1 on `quotedetail` Create — it mutates the Target directly (no extra Update) so the platform's insert carries the correct flag, and `CalculateDeliveryPricingPlugin` at rank 2 sees it.
 - `CalculateDeliveryPricingPlugin` writes per-line delivered prices, extended amounts, **and** rolls up the five Quote-level totals (FOB, delivered trailer/straight, tax trailer/straight). The rollup includes the per-line tax fields written by `CalculateTaxPlugin` at rank 50 on subsequent passes.
 - `RecalcQuoteOnFreightChange` drives the per-quote freight cascade. If raw inputs change (shipping rate, cycle, load, unload) it recalculates the cached trailer / straight rates + total trip minutes and re-fires every child line. If only the rate fields change (manual override of trailer or straight rate) it skips the recalc so the manual values are preserved, and just re-fires the lines. Self-recursion guarded via depth — the second-pass invocation triggered by our own rate write exits immediately. Freight is per-quote — no cross-quote cascade and no project-side cascade.
-- `RecalcOnQuoteDeliveryPreferenceChange` re-fires the line-level tax + rollup when the user edits `eb_deliverypreference` on a quote. It touches each child `quotedetail` by writing its current quantity back, which trips the filter attribute on the downstream pricing plugins so they re-read the (now updated) preference from the quote and produce new tax amounts and totals.
+- `RecalcOnQuoteDeliveryPreferenceChange` re-fires the line-level tax + rollup when the user edits `eb_deliverypreference` **or** `shipto_postalcode` on a quote. It touches each child `quotedetail` by writing its current quantity back, which trips the filter attribute on the downstream pricing plugins so they re-read the (now updated) preference and ZIP from the quote and produce new tax amounts and totals.
 - `SyncPriceListOnCustomerChange` swaps `pricelevelid` to the new customer's `defaultpricelevelid` whenever `customerid` changes on a quote. By design it does **not** re-price existing line items — the user manually adjusts those if needed. Account-only (rejects Contact-typed customers); skips Won/Closed quotes.
 
 ## 4. Behaviour summary
@@ -208,12 +208,16 @@ amounts **and** the qty-independent with-tax unit prices):
 | `2` Delivery        | `deliveredprice × qty × rate` (0 if incoming)      | `deliveredprice × (1 + rate)` (0 if incoming)       |
 | `3` FOB + Delivery  | same as Delivery                                   | same as Delivery                                    |
 
-Rate is resolved by `TaxRateService.LookupCombinedRate("MN",
-opportunity.eb_jobsitezip)`. The service strips non-digit characters from
-the ZIP and queries `eb_taxrate` with `BeginsWith`, so user-entered ZIPs
-in any of the three common formats (5-digit, 9-digit dashed, 9-digit
-undashed) all resolve. If no row matches the plugin throws – we'd rather
-fail a save than silently store $0 tax on a six-figure order.
+Rate is resolved by `TaxRateService.LookupCombinedRate("MN", zip)`
+where the ZIP is the quote's own `shipto_postalcode`, falling back to
+the project's `eb_jobsitezip` when the quote's is blank. That keeps
+per-quote scenarios working — e.g. an FOB project (no ZIP) whose quote
+was flipped to Delivery with a job site entered directly on the quote.
+The service strips non-digit characters from the ZIP and queries
+`eb_taxrate` with `BeginsWith`, so user-entered ZIPs in any of the
+three common formats (5-digit, 9-digit dashed, 9-digit undashed) all
+resolve. If no row matches the plugin throws – we'd rather fail a save
+than silently store $0 tax on a six-figure order.
 
 ### Aggregating Quote totals
 

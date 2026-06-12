@@ -27,9 +27,10 @@ namespace Couture.Plugins.MultipleQuotes
     /// delivered prices differ (different freight components) and MN
     /// taxes the full delivered price including freight.
     ///
-    /// Tax rate is resolved by stripping non-digits from the opportunity's
-    /// eb_jobsitezip and querying eb_taxrate for the row whose eb_zip
-    /// begins with that prefix in state "MN". See TaxRateService.
+    /// Tax rate is resolved by stripping non-digits from the quote's
+    /// shipto_postalcode (falling back to the project's eb_jobsitezip if
+    /// the quote's is blank) and querying eb_taxrate for the row whose
+    /// eb_zip begins with that prefix in state "MN". See TaxRateService.
     ///
     /// Register on:
     ///   Message=Create, PrimaryEntity=quotedetail, Stage=PostOperation (40)
@@ -80,27 +81,17 @@ namespace Couture.Plugins.MultipleQuotes
                 quoteRef.Id,
                 new ColumnSet(
                     SchemaConstants.Quote.OpportunityId,
-                    SchemaConstants.Quote.DeliveryPreference));
+                    SchemaConstants.Quote.DeliveryPreference,
+                    SchemaConstants.Quote.ShipToPostalCode));
 
             // Delivery preference lives on the quote (seeded from the
-            // project at Create, then editable per-quote). The ZIP still
-            // comes from the project.
+            // project at Create, then editable per-quote). The ZIP comes
+            // from the quote's ship-to as well – the project may be FOB
+            // with no ZIP while this particular quote is Delivery with a
+            // job site entered directly on the quote.
             var preference = quote.GetAttributeValue<OptionSetValue>(
                 SchemaConstants.Quote.DeliveryPreference);
             var preferenceValue = preference?.Value ?? -1;
-
-            var oppRef = quote.GetAttributeValue<EntityReference>(
-                SchemaConstants.Quote.OpportunityId);
-            if (oppRef == null)
-            {
-                ctx.Tracing.Trace("No parent Opportunity on Quote – exiting.");
-                return;
-            }
-
-            var opportunity = ctx.Service.Retrieve(
-                SchemaConstants.Entities.Opportunity,
-                oppRef.Id,
-                new ColumnSet(SchemaConstants.Opportunity.JobsiteZip));
 
             var isIncoming = record.GetAttributeValue<bool>(
                 SchemaConstants.QuoteDetail.IsIncomingMaterial);
@@ -122,8 +113,29 @@ namespace Couture.Plugins.MultipleQuotes
             var deliveredStraight = record.GetAttributeValue<Money>(
                 SchemaConstants.QuoteDetail.DeliveredPriceStraight);
 
-            var rawZip = opportunity.GetAttributeValue<string>(
-                SchemaConstants.Opportunity.JobsiteZip);
+            // Prefer the quote's own ship-to ZIP; fall back to the
+            // project's job-site ZIP for quotes created before the
+            // ship-to seed existed (or where the user cleared it).
+            var rawZip = quote.GetAttributeValue<string>(
+                SchemaConstants.Quote.ShipToPostalCode);
+            if (string.IsNullOrWhiteSpace(rawZip))
+            {
+                var oppRef = quote.GetAttributeValue<EntityReference>(
+                    SchemaConstants.Quote.OpportunityId);
+                if (oppRef != null)
+                {
+                    var opportunity = ctx.Service.Retrieve(
+                        SchemaConstants.Entities.Opportunity,
+                        oppRef.Id,
+                        new ColumnSet(SchemaConstants.Opportunity.JobsiteZip));
+                    rawZip = opportunity.GetAttributeValue<string>(
+                        SchemaConstants.Opportunity.JobsiteZip);
+                    ctx.Tracing.Trace(
+                        "Quote ship-to ZIP blank – fell back to Project ZIP '{0}'.",
+                        rawZip);
+                }
+            }
+
             var taxService = new TaxRateService(ctx.Service, ctx.Tracing);
             var rate = taxService.LookupCombinedRate(
                 SchemaConstants.TaxRate.MinnesotaStateName, rawZip);
@@ -134,8 +146,11 @@ namespace Couture.Plugins.MultipleQuotes
                 // visible rather than silently storing $0 tax on what could
                 // be a $100k order.
                 throw new InvalidPluginExecutionException(
-                    $"No tax rate found for Jobsite ZIP '{rawZip}' in state 'MN'. " +
-                    "Check the eb_taxrate table and the ZIP on the Project.");
+                    $"No tax rate found for ZIP '{rawZip}'. Delivery and " +
+                    "FOB & Delivery quotes need a Ship To ZIP/Postal Code in " +
+                    "the Job Site section of the quote (or a Jobsite ZIP on " +
+                    "the Project). Also check the eb_taxrate table has a row " +
+                    "for that ZIP in state 'MN'.");
             }
 
             // Unit prices with tax don't depend on quantity, so compute
