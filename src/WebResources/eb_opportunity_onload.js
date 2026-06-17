@@ -5,19 +5,33 @@ Couture.Opportunity.DEFAULT_ACCOUNT_NAME = "Default (do not remove)";
 
 Couture.Opportunity.DELIVERY_PREF_FOB = 1;
 
-// Hidden + made optional when delivery preference = FOB.
-Couture.Opportunity.HIDEABLE_FREIGHT_FIELDS = [
+// User-entered inputs that drive the freight math. Hidden + optional
+// for FOB; visible + required for Delivery / FOB+Delivery.
+Couture.Opportunity.FREIGHT_INPUT_FIELDS = [
     "eb_cycletime",
-    "eb_shippingrateperhour",
+    "eb_shippingrateperhour"
+];
+
+// Calculated outputs the plugin writes. Hidden for FOB; visible (but
+// read-only and never required) for Delivery / FOB+Delivery so the
+// user can see the math but can't break it.
+Couture.Opportunity.FREIGHT_OUTPUT_FIELDS = [
     "eb_straighttruckrateton",
     "eb_trailerrateton",
-    "eb_loadtime",
-    "eb_unloadtime",
     "eb_totaltripminutes"
 ];
 
-// Stays visible regardless (FOB users can still capture lat/long for
-// heat-mapping) but its required flag toggles with the preference.
+// Load and unload are hard-coded to 10 minutes each. JS keeps them in
+// sync on every form load + preference change so the data layer is
+// always consistent. Always hidden and disabled — the user never
+// touches these.
+Couture.Opportunity.LOAD_UNLOAD_FIELDS = [
+    "eb_loadtime",
+    "eb_unloadtime"
+];
+Couture.Opportunity.LOAD_UNLOAD_VALUE = 10;
+
+// Job site ZIP — always visible, required only when not FOB.
 Couture.Opportunity.JOBSITE_ZIP_FIELD = "eb_jobsitezip";
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -69,17 +83,13 @@ Couture.Opportunity.onLoad = function (executionContext) {
     });
 };
 
-// ─────────────────────────────────────────────────────────────────────────
-// Wire this as the OnChange handler on eb_deliverypreference.
-// ─────────────────────────────────────────────────────────────────────────
+// OnChange handler on eb_deliverypreference
 Couture.Opportunity.onDeliveryPreferenceChange = function (executionContext) {
     Couture.Opportunity.applyDeliveryPreferenceVisibility(executionContext.getFormContext());
 };
 
 // ─────────────────────────────────────────────────────────────────────────
-// Shared show/hide + required toggle. Called from onLoad and onChange.
-// FOB → freight fields hidden + optional, ZIP optional but visible.
-// Anything else → freight fields visible + required, ZIP required.
+// Shared show/hide + required + read-only toggle.
 // ─────────────────────────────────────────────────────────────────────────
 Couture.Opportunity.applyDeliveryPreferenceVisibility = function (formContext) {
     var prefAttr = formContext.getAttribute("eb_deliverypreference");
@@ -88,24 +98,47 @@ Couture.Opportunity.applyDeliveryPreferenceVisibility = function (formContext) {
     var pref = prefAttr.getValue();
     var isFob = pref === Couture.Opportunity.DELIVERY_PREF_FOB;
 
-    // Freight fields: hide and un-require for FOB; show and require otherwise.
-    Couture.Opportunity.HIDEABLE_FREIGHT_FIELDS.forEach(function (fieldName) {
+    // Inputs — visible + required when not FOB.
+    Couture.Opportunity.FREIGHT_INPUT_FIELDS.forEach(function (fieldName) {
         Couture.Opportunity._setFieldState(formContext, fieldName,
             /* visible  */ !isFob,
-            /* required */ !isFob);
+            /* required */ !isFob,
+            /* disabled */ false);
     });
 
-    // Job site ZIP: always visible, required only when not FOB.
+    // Outputs — visible when not FOB, but always read-only, never required.
+    Couture.Opportunity.FREIGHT_OUTPUT_FIELDS.forEach(function (fieldName) {
+        Couture.Opportunity._setFieldState(formContext, fieldName,
+            /* visible  */ !isFob,
+            /* required */ false,
+            /* disabled */ true);
+    });
+
+    // Load / unload — always hidden, disabled, force-set to 10.
+    Couture.Opportunity.LOAD_UNLOAD_FIELDS.forEach(function (fieldName) {
+        var attr = formContext.getAttribute(fieldName);
+        if (attr && attr.getValue() !== Couture.Opportunity.LOAD_UNLOAD_VALUE) {
+            attr.setValue(Couture.Opportunity.LOAD_UNLOAD_VALUE);
+        }
+        Couture.Opportunity._setFieldState(formContext, fieldName,
+            /* visible  */ false,
+            /* required */ false,
+            /* disabled */ true);
+    });
+
+    // Job site ZIP — always visible, required only when not FOB.
     Couture.Opportunity._setFieldState(formContext,
         Couture.Opportunity.JOBSITE_ZIP_FIELD,
         /* visible  */ true,
-        /* required */ !isFob);
+        /* required */ !isFob,
+        /* disabled */ false);
 };
 
-Couture.Opportunity._setFieldState = function (formContext, fieldName, visible, required) {
+Couture.Opportunity._setFieldState = function (formContext, fieldName, visible, required, disabled) {
     var control = formContext.getControl(fieldName);
-    if (control && control.setVisible) {
-        control.setVisible(visible);
+    if (control) {
+        if (control.setVisible) control.setVisible(visible);
+        if (control.setDisabled) control.setDisabled(disabled);
     }
 
     var attr = formContext.getAttribute(fieldName);

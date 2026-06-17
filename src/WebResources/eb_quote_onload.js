@@ -3,45 +3,52 @@ Couture.Quote = Couture.Quote || {};
 
 Couture.Quote.DELIVERY_PREF_FOB = 1;
 
-// Hidden + made optional when delivery preference = FOB.
-Couture.Quote.HIDEABLE_FREIGHT_FIELDS = [
+// User-entered inputs that drive the freight math. Hidden + optional
+// for FOB; visible + required for Delivery / FOB+Delivery.
+Couture.Quote.FREIGHT_INPUT_FIELDS = [
     "eb_cycletime",
-    "eb_shippingrateperhour",
+    "eb_shippingrateperhour"
+];
+
+// Calculated outputs the plugin writes. Hidden for FOB; visible (but
+// read-only and never required) for Delivery / FOB+Delivery so the
+// user can see the math but can't break it.
+Couture.Quote.FREIGHT_OUTPUT_FIELDS = [
     "eb_straighttruckrateton",
     "eb_trailerrateton",
-    "eb_loadtime",
-    "eb_unloadtime",
     "eb_totaltripminutes"
 ];
 
-// Ship-to ZIP stays visible regardless (FOB users can still capture
-// lat/long for heat-mapping) but its required flag toggles with the
-// preference. If you also surface a custom eb_jobsitezip on the Quote
-// form, add it to this array.
+// Load and unload are hard-coded to 10 minutes each. JS keeps them in
+// sync on every form load + preference change so the data layer is
+// always consistent. Always hidden and disabled — the user never
+// touches these.
+Couture.Quote.LOAD_UNLOAD_FIELDS = [
+    "eb_loadtime",
+    "eb_unloadtime"
+];
+Couture.Quote.LOAD_UNLOAD_VALUE = 10;
+
+// Ship-to ZIP — always visible, required only when not FOB.
 Couture.Quote.ZIP_FIELDS = [
     "shipto_postalcode"
 ];
 
 // ─────────────────────────────────────────────────────────────────────────
-// onLoad — runs on every Quote form load. Applies the delivery-preference
-// visibility rules immediately so the form opens in the right shape.
+// onLoad
 // ─────────────────────────────────────────────────────────────────────────
 Couture.Quote.onLoad = function (executionContext) {
     var formContext = executionContext.getFormContext();
     Couture.Quote.applyDeliveryPreferenceVisibility(formContext);
 };
 
-// ─────────────────────────────────────────────────────────────────────────
-// Wire as the OnChange handler on eb_deliverypreference on the Quote.
-// ─────────────────────────────────────────────────────────────────────────
+// OnChange of eb_deliverypreference
 Couture.Quote.onDeliveryPreferenceChange = function (executionContext) {
     Couture.Quote.applyDeliveryPreferenceVisibility(executionContext.getFormContext());
 };
 
 // ─────────────────────────────────────────────────────────────────────────
 // Shared show/hide + required toggle.
-//   FOB → freight fields hidden + optional, ZIP optional but visible.
-//   anything else → freight fields visible + required, ZIP required.
 // ─────────────────────────────────────────────────────────────────────────
 Couture.Quote.applyDeliveryPreferenceVisibility = function (formContext) {
     var prefAttr = formContext.getAttribute("eb_deliverypreference");
@@ -50,25 +57,48 @@ Couture.Quote.applyDeliveryPreferenceVisibility = function (formContext) {
     var pref = prefAttr.getValue();
     var isFob = pref === Couture.Quote.DELIVERY_PREF_FOB;
 
-    // Freight fields: hide and un-require for FOB; show and require otherwise.
-    Couture.Quote.HIDEABLE_FREIGHT_FIELDS.forEach(function (fieldName) {
+    // Inputs — visible + required when not FOB.
+    Couture.Quote.FREIGHT_INPUT_FIELDS.forEach(function (fieldName) {
         Couture.Quote._setFieldState(formContext, fieldName,
             /* visible  */ !isFob,
-            /* required */ !isFob);
+            /* required */ !isFob,
+            /* disabled */ false);
     });
 
-    // ZIP field(s): always visible, required only when not FOB.
+    // Outputs — visible when not FOB, but always read-only, never required.
+    Couture.Quote.FREIGHT_OUTPUT_FIELDS.forEach(function (fieldName) {
+        Couture.Quote._setFieldState(formContext, fieldName,
+            /* visible  */ !isFob,
+            /* required */ false,
+            /* disabled */ true);
+    });
+
+    // Load / unload — always hidden, disabled, force-set to 10.
+    Couture.Quote.LOAD_UNLOAD_FIELDS.forEach(function (fieldName) {
+        var attr = formContext.getAttribute(fieldName);
+        if (attr && attr.getValue() !== Couture.Quote.LOAD_UNLOAD_VALUE) {
+            attr.setValue(Couture.Quote.LOAD_UNLOAD_VALUE);
+        }
+        Couture.Quote._setFieldState(formContext, fieldName,
+            /* visible  */ false,
+            /* required */ false,
+            /* disabled */ true);
+    });
+
+    // ZIP — always visible, required only when not FOB.
     Couture.Quote.ZIP_FIELDS.forEach(function (fieldName) {
         Couture.Quote._setFieldState(formContext, fieldName,
             /* visible  */ true,
-            /* required */ !isFob);
+            /* required */ !isFob,
+            /* disabled */ false);
     });
 };
 
-Couture.Quote._setFieldState = function (formContext, fieldName, visible, required) {
+Couture.Quote._setFieldState = function (formContext, fieldName, visible, required, disabled) {
     var control = formContext.getControl(fieldName);
-    if (control && control.setVisible) {
-        control.setVisible(visible);
+    if (control) {
+        if (control.setVisible) control.setVisible(visible);
+        if (control.setDisabled) control.setDisabled(disabled);
     }
 
     var attr = formContext.getAttribute(fieldName);
