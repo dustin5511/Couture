@@ -87,10 +87,6 @@ namespace Couture.Plugins.MultipleQuotes
                 SchemaConstants.Quote.ShippingRatePerHour);
             var cycle = quote.GetAttributeValue<int?>(
                 SchemaConstants.Quote.CycleTime);
-            var load = quote.GetAttributeValue<int?>(
-                SchemaConstants.Quote.LoadTime);
-            var unload = quote.GetAttributeValue<int?>(
-                SchemaConstants.Quote.UnloadTime);
 
             if (shipping == null || shipping.Value <= 0
                 || cycle == null || cycle.Value <= 0)
@@ -109,10 +105,14 @@ namespace Couture.Plugins.MultipleQuotes
                 return;
             }
 
+            // Load and unload are hard-coded to 10 minutes each (Kraemer's
+            // requirement). The plugin always uses the constants rather
+            // than reading from the entity, so back-channel writes to
+            // those columns can't break the math.
             var totalMinutes =
                 cycle.Value
-                + (load ?? SchemaConstants.Freight.DefaultLoadTimeMinutes)
-                + (unload ?? SchemaConstants.Freight.DefaultUnloadTimeMinutes);
+                + SchemaConstants.Freight.DefaultLoadTimeMinutes
+                + SchemaConstants.Freight.DefaultUnloadTimeMinutes;
 
             var costPerTrip =
                 (shipping.Value / SchemaConstants.Freight.MinutesPerHour) * totalMinutes;

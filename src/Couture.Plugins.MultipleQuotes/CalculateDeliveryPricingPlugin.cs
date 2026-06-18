@@ -201,10 +201,6 @@ namespace Couture.Plugins.MultipleQuotes
                 SchemaConstants.Quote.ShippingRatePerHour);
             var cycle = quote.GetAttributeValue<int?>(
                 SchemaConstants.Quote.CycleTime);
-            var load = quote.GetAttributeValue<int?>(
-                SchemaConstants.Quote.LoadTime);
-            var unload = quote.GetAttributeValue<int?>(
-                SchemaConstants.Quote.UnloadTime);
 
             if (shipping == null || shipping.Value <= 0)
             {
@@ -220,10 +216,11 @@ namespace Couture.Plugins.MultipleQuotes
                 return false;
             }
 
+            // Load and unload are hard-coded to 10 minutes each.
             var totalMinutes =
                 cycle.Value
-                + (load ?? SchemaConstants.Freight.DefaultLoadTimeMinutes)
-                + (unload ?? SchemaConstants.Freight.DefaultUnloadTimeMinutes);
+                + SchemaConstants.Freight.DefaultLoadTimeMinutes
+                + SchemaConstants.Freight.DefaultUnloadTimeMinutes;
 
             var costPerTrip = (shipping.Value / SchemaConstants.Freight.MinutesPerHour) * totalMinutes;
             trailerRate = Math.Round(costPerTrip / SchemaConstants.Freight.TrailerTonsPerLoad, 2);
