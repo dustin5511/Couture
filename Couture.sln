@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Couture.Plugins.MultipleQuotes/Couture.Plugins.MultipleQuotes.csproj" />
+  </Folder>
+</Solution>
