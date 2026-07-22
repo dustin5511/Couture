@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Sleepy Sloth — A Bedtime Climb</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; background: #070a1c; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: "Courier New", monospace; overflow: hidden;
+    touch-action: manipulation;
+  }
+  #wrap { position: relative; width: 100%; max-width: 880px; }
+  canvas { display: block; width: 100%; height: auto; border-radius: 6px; }
+  #touch {
+    position: absolute; inset: 0; display: none; pointer-events: none;
+    user-select: none; -webkit-user-select: none;
+  }
+  @media (pointer: coarse) { #touch { display: block; } }
+  .tbtn {
+    position: absolute; width: 64px; height: 64px; border-radius: 50%;
+    background: rgba(255,255,255,0.12); border: 2px solid rgba(255,255,255,0.35);
+    color: #fff; font-size: 26px; line-height: 60px; text-align: center;
+    pointer-events: auto; bottom: 14px;
+  }
+  #btnL { left: 14px; }  #btnR { left: 92px; }
+  #btnU { right: 92px; bottom: 60px; } #btnD { right: 92px; bottom: 0px; height: 52px; line-height: 48px;}
+  #btnJ { right: 14px; bottom: 24px; background: rgba(255,220,120,0.2); border-color: rgba(255,220,120,0.6);}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game" width="880" height="720"></canvas>
+  <div id="touch">
+    <div class="tbtn" id="btnL">&#9664;</div>
+    <div class="tbtn" id="btnR">&#9654;</div>
+    <div class="tbtn" id="btnU">&#9650;</div>
+    <div class="tbtn" id="btnD">&#9660;</div>
+    <div class="tbtn" id="btnJ">&#10548;</div>
+  </div>
+</div>
+<script>
+"use strict";
+const cv = document.getElementById("game");
+const g  = cv.getContext("2d");
+const W = 880, H = 720;
+
+/* ---------------- world geometry ---------------- */
+function P(x1, y1, x2, y2, dir, fall) {
+  return { x1, y1, x2, y2, dir, fall,
+           y(x) { return this.y1 + (x - this.x1) * (this.y2 - this.y1) / (this.x2 - this.x1); } };
+}
+// dir: which way clocks roll (+1 right, -1 left). fall: which end they drop off.
+const plats = [
+  P(  0, 672, 880, 688, +1, "exit"),   // 0 ground — clocks exit off-screen right
+  P( 30, 598, 880, 582, -1, "left"),
+  P(  0, 488, 850, 505, +1, "right"),
+  P( 30, 415, 880, 398, -1, "left"),
+  P(  0, 322, 850, 338, +1, "right"),
+  P( 30, 250, 880, 232, -1, "left"),   // 5 top run — clocks spawn here
+  P(320, 168, 560, 168,  0, null),     // 6 bed platform
+];
+// ladders: {x, top platform index, bottom platform index}
+const ladders = [
+  { x: 800, t: 1, b: 0 }, { x: 300, t: 1, b: 0 },
+  { x:  90, t: 2, b: 1 },
+  { x: 770, t: 3, b: 2 }, { x: 350, t: 3, b: 2 },
+  { x:  90, t: 4, b: 3 },
+  { x: 750, t: 5, b: 4 }, { x: 200, t: 5, b: 4 },
+  { x: 440, t: 6, b: 5 },
+].map(L => ({ x: L.x, top: plats[L.t].y(L.x), bot: plats[L.b].y(L.x) }));
+
+const BED = { x1: 340, x2: 556, y: 168 };
+const stars = [];
+{ let s = 9301; const rnd = () => (s = (s * 49297 + 233) % 233280) / 233280;
+  for (let i = 0; i < 90; i++) stars.push({ x: rnd() * W, y: rnd() * 560, r: rnd() * 1.4 + 0.4, tw: rnd() * 6.28 }); }
+
+/* ---------------- state ---------------- */
+const keys = {};
+let state = "title";          // title | play | dying | sleep | gameover
+let night, score, lives, maxPlat, invT, deadT, sleepT, spawnT, frame = 0, muted = false, paused = false;
+const player = { x: 0, y: 0, vx: 0, vy: 0, dir: 1, grounded: false, plat: 0, climbing: null, phase: 0 };
+let clocks = [], floaters = [], zzz = [];
+
+function resetPlayer() {
+  player.x = 40; player.y = plats[0].y(40);
+  player.vx = 0; player.vy = 0; player.dir = 1;
+  player.grounded = true; player.plat = 0; player.climbing = null;
+}
+function startNight(n) {
+  night = n; clocks = []; floaters = []; zzz = [];
+  maxPlat = 0; spawnT = 50; invT = 90; resetPlayer(); state = "play";
+}
+function newGame() { score = 0; lives = 3; startNight(1); }
+
+/* ---------------- audio ---------------- */
+let ac = null;
+function beep(f, dur, type, vol, slide) {
+  if (muted) return;
+  try {
+    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    const o = ac.createOscillator(), gn = ac.createGain();
+    o.type = type || "square"; o.frequency.value = f;
+    if (slide) o.frequency.exponentialRampToValueAtTime(slide, ac.currentTime + dur);
+    gn.gain.value = vol || 0.05;
+    gn.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + dur);
+    o.connect(gn); gn.connect(ac.destination);
+    o.start(); o.stop(ac.currentTime + dur);
+  } catch (e) {}
+}
+const sfx = {
+  jump: () => beep(240, 0.15, "square", 0.05, 480),
+  step: () => beep(120, 0.05, "triangle", 0.02),
+  hit:  () => { beep(320, 0.3, "sawtooth", 0.07, 60); },
+  score:() => beep(660, 0.12, "square", 0.045, 880),
+  win:  () => { [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => beep(f, 0.35, "triangle", 0.06), i * 160)); },
+  spawn:() => beep(1400, 0.06, "square", 0.02),
+};
+
+/* ---------------- input ---------------- */
+addEventListener("keydown", e => {
+  const k = e.key;
+  if (["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"," "].includes(k)) e.preventDefault();
+  if (k === "m" || k === "M") muted = !muted;
+  if (k === "p" || k === "P") paused = !paused;
+  if (state === "title"    && (k === "Enter" || k === " ")) { newGame(); return; }
+  if (state === "gameover" && (k === "Enter" || k === " ")) { state = "title"; return; }
+  keys[k] = true;
+});
+addEventListener("keyup", e => { keys[e.key] = false; });
+function bindBtn(id, key) {
+  const el = document.getElementById(id);
+  const on  = e => { e.preventDefault(); keys[key] = true;
+                     if (state === "title") newGame(); else if (state === "gameover") state = "title"; };
+  const off = e => { e.preventDefault(); keys[key] = false; };
+  el.addEventListener("pointerdown", on); el.addEventListener("pointerup", off);
+  el.addEventListener("pointerleave", off); el.addEventListener("pointercancel", off);
+}
+bindBtn("btnL", "ArrowLeft"); bindBtn("btnR", "ArrowRight");
+bindBtn("btnU", "ArrowUp");   bindBtn("btnD", "ArrowDown"); bindBtn("btnJ", " ");
+cv.addEventListener("pointerdown", () => { if (state === "title") newGame(); else if (state === "gameover") state = "title"; });
+
+const left  = () => keys["ArrowLeft"]  || keys["a"] || keys["A"];
+const right = () => keys["ArrowRight"] || keys["d"] || keys["D"];
+const up    = () => keys["ArrowUp"]    || keys["w"] || keys["W"];
+const down  = () => keys["ArrowDown"]  || keys["s"] || keys["S"];
+const jump  = () => keys[" "];
+
+/* ---------------- update ---------------- */
+function updatePlayer() {
+  const p = player;
+  if (p.climbing) {
+    const L = p.climbing;
+    p.x += (L.x - p.x) * 0.4;
+    if (up())   p.y -= 2.0;
+    if (down()) p.y += 2.0;
+    if (up() || down()) p.phase += 0.15;
+    if (jump()) { p.climbing = null; p.vy = -4; keys[" "] = false; }
+    if (p.y <= L.top) { p.y = L.top; p.climbing = null; p.grounded = true; }
+    if (p.y >= L.bot) { p.y = L.bot; p.climbing = null; p.grounded = true; }
+  } else {
+    let mv = 0;
+    if (left())  { mv -= 2.7; p.dir = -1; }
+    if (right()) { mv += 2.7; p.dir =  1; }
+    p.x += mv;
+    p.x = Math.max(12, Math.min(W - 12, p.x));
+    if (mv !== 0 && p.grounded) { p.phase += 0.22; if ((p.phase | 0) % 4 === 0 && Math.random() < 0.05) sfx.step(); }
+
+    if (jump() && p.grounded) { p.vy = -8.8; p.grounded = false; sfx.jump(); keys[" "] = false; }
+
+    p.vy += 0.5; if (p.vy > 12) p.vy = 12;
+    const prevY = p.y;
+    p.y += p.vy;
+
+    // land on / stick to platforms
+    p.grounded = false;
+    let best = null, bestD = 15;
+    for (let i = 0; i < plats.length; i++) {
+      const pl = plats[i];
+      if (p.x < pl.x1 - 4 || p.x > pl.x2 + 4) continue;
+      const ys = pl.y(p.x);
+      if (p.vy >= 0 && prevY <= ys + 12 && p.y >= ys - 6) {
+        const d = Math.abs(p.y - ys);
+        if (d < bestD) { bestD = d; best = i; }
+      }
+    }
+    if (best !== null) {
+      p.y = plats[best].y(p.x); p.vy = 0; p.grounded = true; p.plat = best;
+      if (best > maxPlat && best < 6) {
+        score += 150 * (best - maxPlat); maxPlat = best; sfx.score();
+        floaters.push({ x: p.x, y: p.y - 44, t: 60, text: "+" + 150 * (best - maxPlat) });
+      }
+    }
+
+    // grab ladders
+    for (const L of ladders) {
+      if (Math.abs(p.x - L.x) > 16) continue;
+      if (up() && p.y > L.top + 2 && p.y < L.bot + 20) { p.climbing = L; p.vy = 0; break; }
+      if (down() && p.grounded && Math.abs(p.y - L.top) < 8) { p.climbing = L; p.y = L.top + 6; p.vy = 0; break; }
+    }
+
+    // reached the bed!
+    if (p.grounded && p.plat === 6) {
+      state = "sleep"; sleepT = 0;
+      score += 1000 + lives * 250; sfx.win();
+    }
+  }
+}
+
+function updateClocks() {
+  // spawn
+  if (--spawnT <= 0) {
+    spawnT = Math.max(55, 150 - night * 16) + Math.random() * 45;
+    clocks.push({ x: 845, y: plats[5].y(845) - 13, vx: -(1.5 + night * 0.12), vy: 0,
+                  pi: 5, falling: false, r: 13, ang: 0, jumped: false });
+    sfx.spawn();
+  }
+  const accel = 0.035 + night * 0.004;
+  const vmax  = Math.min(4.2, 2.6 + night * 0.25);
+  for (const c of clocks) {
+    if (!c.falling) {
+      const pl = plats[c.pi];
+      c.vx += pl.dir * accel;
+      c.vx = Math.max(-vmax, Math.min(vmax, c.vx));
+      c.x += c.vx;
+      c.ang += c.vx / c.r;
+      if (pl.fall === "left"  && c.x < pl.x1) { c.falling = true; c.vy = 0; }
+      else if (pl.fall === "right" && c.x > pl.x2) { c.falling = true; c.vy = 0; }
+      else if (c.x >= pl.x1 && c.x <= pl.x2) c.y = pl.y(c.x) - c.r;
+    } else {
+      c.vy += 0.42;
+      const prevB = c.y + c.r;
+      c.y += c.vy; c.x += c.vx * 0.25; c.ang += c.vx / c.r * 0.5;
+      c.x = Math.max(6, Math.min(874, c.x));
+      for (let i = 0; i < plats.length; i++) {
+        const pl = plats[i];
+        if (c.x < pl.x1 || c.x > pl.x2) continue;
+        const ys = pl.y(c.x);
+        if (c.vy > 0 && prevB <= ys + 8 && c.y + c.r >= ys) {
+          c.y = ys - c.r; c.falling = false; c.pi = i; c.vy = 0;
+          c.vx = pl.dir * Math.max(Math.abs(c.vx), 1.5);
+          break;
+        }
+      }
+    }
+  }
+  clocks = clocks.filter(c => c.x < W + 50 && c.y < H + 60);
+}
+
+function checkCollisions() {
+  if (invT > 0) return;
+  const p = player;
+  for (const c of clocks) {
+    // clock circle vs player box (feet at p.y, ~22 wide, 30 tall)
+    const nx = Math.max(p.x - 10, Math.min(c.x, p.x + 10));
+    const ny = Math.max(p.y - 30, Math.min(c.y, p.y));
+    const dx = c.x - nx, dy = c.y - ny;
+    if (dx * dx + dy * dy < (c.r - 2) * (c.r - 2)) {
+      state = "dying"; deadT = 70; lives--; sfx.hit();
+      return;
+    }
+    // jumped clean over a clock → bonus
+    if (!c.jumped && !p.grounded && !p.climbing && Math.abs(c.x - p.x) < 24 && c.y - c.r > p.y + 6) {
+      c.jumped = true; score += 50; sfx.score();
+      floaters.push({ x: c.x, y: c.y - 30, t: 50, text: "+50" });
+    }
+  }
+}
+
+function update() {
+  frame++;
+  if (state === "play") {
+    if (invT > 0) invT--;
+    updatePlayer();
+    if (state === "play") { updateClocks(); checkCollisions(); }
+  } else if (state === "dying") {
+    updateClocks();
+    if (--deadT <= 0) {
+      if (lives <= 0) state = "gameover";
+      else { resetPlayer(); invT = 120; state = "play"; }
+    }
+  } else if (state === "sleep") {
+    sleepT++;
+    if (sleepT % 30 === 0) zzz.push({ x: 470 + Math.random() * 30, y: 140, t: 0 });
+    for (const z of zzz) z.t++;
+    zzz = zzz.filter(z => z.t < 120);
+    if (sleepT > 260) startNight(night + 1);
+  }
+  for (const f of floaters) { f.y -= 0.7; f.t--; }
+  floaters = floaters.filter(f => f.t > 0);
+}
+
+/* ---------------- drawing ---------------- */
+function drawBackground() {
+  const gr = g.createLinearGradient(0, 0, 0, H);
+  gr.addColorStop(0, "#0b1030"); gr.addColorStop(0.55, "#1a1f4d"); gr.addColorStop(1, "#2a2350");
+  g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  for (const s of stars) {
+    const a = 0.4 + 0.6 * Math.abs(Math.sin(frame * 0.02 + s.tw));
+    g.fillStyle = "rgba(255,255,230," + a.toFixed(2) + ")";
+    g.fillRect(s.x, s.y, s.r * 2, s.r * 2);
+  }
+  // crescent moon
+  g.fillStyle = "#f5f0d0";
+  g.beginPath(); g.arc(90, 80, 34, 0, 7); g.fill();
+  g.fillStyle = "#0b1030";
+  g.beginPath(); g.arc(104, 72, 30, 0, 7); g.fill();
+}
+
+function drawLadders() {
+  for (const L of ladders) {
+    g.strokeStyle = "#c9a06a"; g.lineWidth = 4;
+    g.beginPath();
+    g.moveTo(L.x - 9, L.top); g.lineTo(L.x - 9, L.bot + 4);
+    g.moveTo(L.x + 9, L.top); g.lineTo(L.x + 9, L.bot + 4);
+    g.stroke();
+    g.lineWidth = 3; g.strokeStyle = "#b08850";
+    for (let y = L.top + 6; y < L.bot; y += 13) {
+      g.beginPath(); g.moveTo(L.x - 9, y); g.lineTo(L.x + 9, y); g.stroke();
+    }
+  }
+}
+
+function drawPlatforms() {
+  for (const pl of plats) {
+    g.fillStyle = "#7a4a2e";
+    g.beginPath();
+    g.moveTo(pl.x1, pl.y1); g.lineTo(pl.x2, pl.y2);
+    g.lineTo(pl.x2, pl.y2 + 20); g.lineTo(pl.x1, pl.y1 + 20);
+    g.closePath(); g.fill();
+    g.strokeStyle = "#a4713f"; g.lineWidth = 3;
+    g.beginPath(); g.moveTo(pl.x1, pl.y1 + 1); g.lineTo(pl.x2, pl.y2 + 1); g.stroke();
+    g.strokeStyle = "rgba(0,0,0,0.25)"; g.lineWidth = 2;
+    for (let x = pl.x1 + 40; x < pl.x2; x += 44) {
+      const y = pl.y(x);
+      g.beginPath(); g.moveTo(x, y + 3); g.lineTo(x, y + 19); g.stroke();
+    }
+  }
+}
+
+function drawBed() {
+  const glow = 0.25 + 0.15 * Math.sin(frame * 0.06);
+  g.fillStyle = "rgba(255,230,150," + glow.toFixed(2) + ")";
+  g.beginPath(); g.ellipse(448, 150, 120, 46, 0, 0, 7); g.fill();
+
+  // legs & frame
+  g.fillStyle = "#5d3a22";
+  g.fillRect(364, 152, 8, 16); g.fillRect(528, 152, 8, 16);
+  // headboard
+  g.fillStyle = "#7a4a2e";
+  g.beginPath(); g.moveTo(358, 156); g.lineTo(358, 112);
+  g.quadraticCurveTo(372, 100, 386, 112); g.lineTo(386, 156); g.closePath(); g.fill();
+  // mattress
+  g.fillStyle = "#f2ead8";
+  g.beginPath(); g.roundRect(360, 140, 176, 16, 5); g.fill();
+  // blanket
+  g.fillStyle = "#8f7ddb";
+  g.beginPath(); g.roundRect(414, 136, 122, 18, 6); g.fill();
+  g.strokeStyle = "#7a68c4"; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(430, 138); g.lineTo(430, 152);
+  g.moveTo(456, 138); g.lineTo(456, 152); g.stroke();
+  // pillow
+  g.fillStyle = "#ffffff";
+  g.beginPath(); g.roundRect(368, 128, 44, 16, 8); g.fill();
+
+  if (state !== "sleep") {
+    // floating Zzz marking the goal
+    g.fillStyle = "rgba(255,255,255,0.85)";
+    g.font = "bold 18px 'Courier New', monospace";
+    const b = Math.sin(frame * 0.05) * 4;
+    g.fillText("z", 500, 108 + b);
+    g.font = "bold 24px 'Courier New', monospace";
+    g.fillText("Z", 512, 94 + b);
+  }
+  // little lamp on nightstand
+  g.fillStyle = "#5d3a22"; g.fillRect(548, 136, 26, 32);
+  g.fillStyle = "#3d2312"; g.fillRect(551, 130, 20, 8);
+  g.fillStyle = "#ffd98a";
+  g.beginPath(); g.moveTo(553, 130); g.lineTo(569, 130); g.lineTo(565, 118); g.lineTo(557, 118); g.closePath(); g.fill();
+  g.fillStyle = "rgba(255,217,138," + (0.25 + 0.1 * Math.sin(frame * 0.1)).toFixed(2) + ")";
+  g.beginPath(); g.arc(561, 124, 18, 0, 7); g.fill();
+}
+
+function drawMachine() {
+  // the Insomnia Machine, hurling alarm clocks from the top-right
+  const bx = 812, by = plats[5].y(830) - 56;
+  g.fillStyle = "#3a2d5e";
+  g.beginPath(); g.roundRect(bx, by, 62, 56, 6); g.fill();
+  g.fillStyle = "#241a3f";
+  g.beginPath(); g.roundRect(bx + 6, by + 6, 50, 22, 4); g.fill();
+  const blink = (frame % 60) < 30;
+  g.fillStyle = blink ? "#ff5252" : "#7a2020";
+  g.beginPath(); g.arc(bx + 31, by + 17, 6, 0, 7); g.fill();
+  // chute
+  g.fillStyle = "#241a3f";
+  g.beginPath(); g.moveTo(bx, by + 34); g.lineTo(bx - 16, by + 42); g.lineTo(bx - 16, by + 52); g.lineTo(bx, by + 50); g.closePath(); g.fill();
+  g.fillStyle = "#cfd2e8"; g.font = "bold 11px 'Courier New', monospace";
+  g.fillText("WAKE CO.", bx + 6, by + 48);
+}
+
+function drawClock(c) {
+  g.save(); g.translate(c.x, c.y); g.rotate(c.ang);
+  // bells
+  g.fillStyle = "#e8b84a";
+  g.beginPath(); g.arc(-7, -c.r + 1, 5, Math.PI, 0); g.fill();
+  g.beginPath(); g.arc( 7, -c.r + 1, 5, Math.PI, 0); g.fill();
+  // body
+  g.fillStyle = "#d64545";
+  g.beginPath(); g.arc(0, 0, c.r, 0, 7); g.fill();
+  g.strokeStyle = "#9c2c2c"; g.lineWidth = 2;
+  g.beginPath(); g.arc(0, 0, c.r, 0, 7); g.stroke();
+  // face
+  g.fillStyle = "#fff7ea";
+  g.beginPath(); g.arc(0, 0, c.r - 4, 0, 7); g.fill();
+  g.strokeStyle = "#5a4632"; g.lineWidth = 1.5;
+  for (let i = 0; i < 4; i++) {
+    const a = i * Math.PI / 2;
+    g.beginPath();
+    g.moveTo(Math.cos(a) * (c.r - 6), Math.sin(a) * (c.r - 6));
+    g.lineTo(Math.cos(a) * (c.r - 8.5), Math.sin(a) * (c.r - 8.5));
+    g.stroke();
+  }
+  // hands spin as it rolls
+  g.strokeStyle = "#33261a"; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(0, 0); g.lineTo(Math.cos(c.ang * 3) * 6, Math.sin(c.ang * 3) * 6); g.stroke();
+  g.beginPath(); g.moveTo(0, 0); g.lineTo(Math.cos(c.ang * 1.5 + 2) * 4, Math.sin(c.ang * 1.5 + 2) * 4); g.stroke();
+  g.restore();
+}
+
+// The heroine: a sloth with long silver hair. x = center, y = feet.
+function drawSloth(x, y, dir, pose, phase) {
+  g.save(); g.translate(x, y); g.scale(dir, 1);
+  const sway = Math.sin(frame * 0.07) * 2;
+
+  // --- long silver hair (drawn behind the body, flowing down her back) ---
+  g.lineCap = "round";
+  for (let i = 0; i < 6; i++) {
+    const off = i - 2.5;
+    g.strokeStyle = i % 2 ? "#e9e9f2" : "#cfd0dd";
+    g.lineWidth = 3.4;
+    g.beginPath();
+    g.moveTo(-1 + off * 1.2, -40);
+    g.quadraticCurveTo(-10 + off * 2 + sway, -22, -12 + off * 2.4 + sway * 1.6, -2 + (i % 3));
+    g.stroke();
+  }
+
+  if (pose === "climb") {
+    // back view on the ladder
+    g.fillStyle = "#94816f";
+    g.beginPath(); g.ellipse(0, -16, 11, 13, 0, 0, 7); g.fill();       // body
+    g.beginPath(); g.arc(0, -33, 10, 0, 7); g.fill();                  // head (hair covers it)
+    for (let i = 0; i < 5; i++) {                                      // hair over the back
+      const off = i - 2;
+      g.strokeStyle = i % 2 ? "#e9e9f2" : "#d8d8e4"; g.lineWidth = 3.6;
+      g.beginPath();
+      g.moveTo(off * 2.4, -41);
+      g.quadraticCurveTo(off * 2.8 + sway, -20, off * 3 + sway, -4);
+      g.stroke();
+    }
+    const c = Math.sin(phase * 2);
+    g.strokeStyle = "#7c6a58"; g.lineWidth = 5;
+    g.beginPath(); g.moveTo(-4, -26); g.lineTo(-11, -38 - c * 5); g.stroke();   // arms
+    g.beginPath(); g.moveTo( 4, -26); g.lineTo( 11, -38 + c * 5); g.stroke();
+    g.beginPath(); g.moveTo(-4, -8);  g.lineTo(-8, 0 + c * 3);  g.stroke();     // legs
+    g.beginPath(); g.moveTo( 4, -8);  g.lineTo( 8, 0 - c * 3);  g.stroke();
+    g.restore(); return;
+  }
+
+  const wob = pose === "walk" ? Math.sin(phase * 2) : 0;
+  // back arm
+  g.strokeStyle = "#7c6a58"; g.lineWidth = 5;
+  g.beginPath(); g.moveTo(2, -24);
+  g.quadraticCurveTo(-4 - wob * 4, -14, -6 - wob * 5, -2); g.stroke();
+  // legs
+  g.strokeStyle = "#877663"; g.lineWidth = 5.5;
+  if (pose === "jump") {
+    g.beginPath(); g.moveTo(-3, -10); g.lineTo(-8, -4); g.stroke();
+    g.beginPath(); g.moveTo( 3, -10); g.lineTo( 7, -3); g.stroke();
+  } else {
+    g.beginPath(); g.moveTo(-3, -10); g.lineTo(-4 - wob * 4, 0); g.stroke();
+    g.beginPath(); g.moveTo( 3, -10); g.lineTo( 4 + wob * 4, 0); g.stroke();
+  }
+  // body
+  g.fillStyle = "#94816f";
+  g.beginPath(); g.ellipse(0, -17, 11, 13.5, 0, 0, 7); g.fill();
+  g.fillStyle = "#b3a28d";
+  g.beginPath(); g.ellipse(2, -15, 6.5, 9, 0, 0, 7); g.fill();          // belly
+  // head
+  g.fillStyle = "#94816f";
+  g.beginPath(); g.arc(2, -33, 10, 0, 7); g.fill();
+  // face patch
+  g.fillStyle = "#dcc9a8";
+  g.beginPath(); g.ellipse(5, -33, 7, 7.6, 0, 0, 7); g.fill();
+  // sloth eye stripe
+  g.strokeStyle = "#5a4632"; g.lineWidth = 3.6;
+  g.beginPath(); g.moveTo(4, -36); g.lineTo(10, -31); g.stroke();
+  // sleepy eye
+  g.fillStyle = "#fff";
+  g.beginPath(); g.arc(7, -33.5, 2.4, 0, 7); g.fill();
+  g.fillStyle = "#2b2118";
+  g.beginPath(); g.arc(7.4, -33, 1.4, 0, 7); g.fill();
+  g.strokeStyle = "#5a4632"; g.lineWidth = 1.4;                          // heavy eyelid
+  g.beginPath(); g.arc(7, -34, 2.6, Math.PI * 1.05, Math.PI * 1.95); g.stroke();
+  // nose + smile
+  g.fillStyle = "#42332a";
+  g.beginPath(); g.ellipse(11.4, -31.5, 1.8, 1.4, 0, 0, 7); g.fill();
+  g.strokeStyle = "#42332a"; g.lineWidth = 1.3;
+  g.beginPath(); g.arc(8.5, -29.5, 2.6, 0.2, Math.PI * 0.75); g.stroke();
+  // silver bangs over the forehead
+  g.strokeStyle = "#e9e9f2"; g.lineWidth = 3;
+  g.beginPath(); g.moveTo(-2, -42); g.quadraticCurveTo(6, -44, 10, -38); g.stroke();
+  g.strokeStyle = "#d8d8e4"; g.lineWidth = 2.6;
+  g.beginPath(); g.moveTo(-4, -41); g.quadraticCurveTo(2, -45, 8, -41); g.stroke();
+  // front arm with little claws
+  g.strokeStyle = "#877663"; g.lineWidth = 5;
+  const reach = pose === "jump" ? -10 : 0;
+  g.beginPath(); g.moveTo(4, -24);
+  g.quadraticCurveTo(10 + wob * 4, -14 + reach, 12 + wob * 5, -3 + reach); g.stroke();
+  g.strokeStyle = "#efe8da"; g.lineWidth = 1.6;
+  for (let i = 0; i < 3; i++) {
+    g.beginPath();
+    g.moveTo(11 + wob * 5 + i * 1.6, -3 + reach);
+    g.lineTo(12 + wob * 5 + i * 1.6, 2 + reach);
+    g.stroke();
+  }
+  g.restore();
+}
+
+function drawDizzy(x, y) {
+  for (let i = 0; i < 3; i++) {
+    const a = frame * 0.15 + i * 2.1;
+    g.fillStyle = "#ffe37a";
+    g.save(); g.translate(x + Math.cos(a) * 16, y - 46 + Math.sin(a) * 5);
+    g.rotate(a); g.font = "bold 13px monospace"; g.fillText("★", -5, 4); g.restore();
+  }
+}
+
+function drawSleepScene() {
+  // sloth tucked into bed
+  g.fillStyle = "#8f7ddb";
+  g.beginPath(); g.roundRect(408, 128, 128, 26, 8); g.fill();           // blanket pulled up
+  g.fillStyle = "#94816f";
+  g.beginPath(); g.arc(392, 128, 10, 0, 7); g.fill();                    // head on pillow
+  g.fillStyle = "#dcc9a8";
+  g.beginPath(); g.ellipse(395, 128, 6.6, 7, 0, 0, 7); g.fill();
+  g.strokeStyle = "#5a4632"; g.lineWidth = 3;
+  g.beginPath(); g.moveTo(393, 125); g.lineTo(399, 129); g.stroke();
+  g.strokeStyle = "#42332a"; g.lineWidth = 1.6;                          // closed eye
+  g.beginPath(); g.arc(397, 128, 2.4, Math.PI * 0.15, Math.PI * 0.85); g.stroke();
+  g.fillStyle = "#42332a";
+  g.beginPath(); g.ellipse(401, 130, 1.6, 1.2, 0, 0, 7); g.fill();
+  // silver hair spilling over the pillow edge
+  const sway = Math.sin(frame * 0.05) * 1.5;
+  for (let i = 0; i < 6; i++) {
+    g.strokeStyle = i % 2 ? "#e9e9f2" : "#cfd0dd"; g.lineWidth = 3;
+    g.beginPath();
+    g.moveTo(388 - i, 121 + i * 1.5);
+    g.quadraticCurveTo(372 - i * 2 + sway, 130, 366 - i * 2 + sway, 146 + (i % 3) * 3);
+    g.stroke();
+  }
+  for (const z of zzz) {
+    const a = Math.max(0, 1 - z.t / 120);
+    g.fillStyle = "rgba(255,255,255," + a.toFixed(2) + ")";
+    g.font = "bold " + (14 + z.t * 0.12) + "px 'Courier New', monospace";
+    g.fillText("Z", z.x + Math.sin(z.t * 0.1) * 8, z.y - z.t * 0.6);
+  }
+  g.fillStyle = "rgba(10,12,40," + Math.min(0.45, sleepT / 300).toFixed(2) + ")";
+  g.fillRect(0, 0, W, H);
+  g.fillStyle = "#ffe9b0"; g.textAlign = "center";
+  g.font = "bold 30px 'Courier New', monospace";
+  g.fillText("Night " + night + " — sweet dreams!", W / 2, 330);
+  g.font = "bold 18px 'Courier New', monospace";
+  g.fillText("+" + (1000 + lives * 250) + " points", W / 2, 362);
+  g.textAlign = "left";
+}
+
+function drawHUD() {
+  g.fillStyle = "rgba(0,0,0,0.35)"; g.fillRect(0, 0, W, 34);
+  g.fillStyle = "#ffe9b0"; g.font = "bold 17px 'Courier New', monospace";
+  g.fillText("SCORE " + String(score).padStart(6, "0"), 14, 23);
+  g.textAlign = "center"; g.fillText("NIGHT " + night, W / 2, 23); g.textAlign = "left";
+  g.fillStyle = "#ff8a9a";
+  for (let i = 0; i < lives; i++) g.fillText("♥", W - 30 - i * 24, 24);
+  if (muted) { g.fillStyle = "#8890b8"; g.fillText("MUTE", W - 130, 24); }
+}
+
+function drawTitle() {
+  drawBackground();
+  g.textAlign = "center";
+  g.fillStyle = "#e9e9f2"; g.font = "bold 56px 'Courier New', monospace";
+  g.fillText("SLEEPY SLOTH", W / 2, 170);
+  g.fillStyle = "#9aa0d0"; g.font = "bold 22px 'Courier New', monospace";
+  g.fillText("a bedtime climb", W / 2, 206);
+  drawSloth(W / 2 - 130, 400, 1, "stand", 0);
+  // mini bed
+  g.save(); g.translate(W / 2 + 60, 360);
+  g.fillStyle = "#7a4a2e"; g.fillRect(-6, 0, 10, 34);
+  g.fillStyle = "#f2ead8"; g.beginPath(); g.roundRect(0, 22, 130, 13, 5); g.fill();
+  g.fillStyle = "#8f7ddb"; g.beginPath(); g.roundRect(40, 19, 90, 15, 5); g.fill();
+  g.fillStyle = "#fff";    g.beginPath(); g.roundRect(6, 12, 34, 13, 6); g.fill();
+  g.restore();
+  g.fillStyle = "#cfd2e8"; g.font = "bold 17px 'Courier New', monospace";
+  g.fillText("She hasn't slept in days. The bed is at the top.", W / 2, 470);
+  g.fillText("The WAKE CO. machine hurls alarm clocks to stop her.", W / 2, 496);
+  g.fillStyle = "#ffe9b0";
+  g.fillText("← → move    ↑ ↓ ladders    SPACE jump", W / 2, 560);
+  g.fillText("P pause    M mute", W / 2, 586);
+  const blink = (frame % 70) < 45;
+  if (blink) { g.font = "bold 24px 'Courier New', monospace"; g.fillText("PRESS ENTER TO START", W / 2, 650); }
+  g.textAlign = "left";
+}
+
+function drawGameOver() {
+  g.fillStyle = "rgba(5,6,20,0.75)"; g.fillRect(0, 0, W, H);
+  g.textAlign = "center";
+  g.fillStyle = "#ff8a9a"; g.font = "bold 44px 'Courier New', monospace";
+  g.fillText("TOO TIRED TO GO ON...", W / 2, 300);
+  g.fillStyle = "#e9e9f2"; g.font = "bold 24px 'Courier New', monospace";
+  g.fillText("SCORE " + score + "   ·   NIGHT " + night, W / 2, 350);
+  const blink = (frame % 70) < 45;
+  if (blink) g.fillText("PRESS ENTER", W / 2, 420);
+  g.textAlign = "left";
+}
+
+function draw() {
+  if (state === "title") { drawTitle(); return; }
+  drawBackground();
+  drawLadders();
+  drawPlatforms();
+  drawMachine();
+  drawBed();
+  for (const c of clocks) drawClock(c);
+  if (state === "sleep") {
+    drawSleepScene();
+  } else {
+    const p = player;
+    const flash = invT > 0 && (invT % 8) < 4;
+    if (!flash) {
+      let pose = "stand";
+      if (p.climbing) pose = "climb";
+      else if (!p.grounded) pose = "jump";
+      else if (left() || right()) pose = "walk";
+      if (state === "dying") pose = "stand";
+      drawSloth(p.x, p.y, p.dir, pose, p.phase);
+      if (state === "dying") drawDizzy(p.x, p.y);
+    }
+  }
+  for (const f of floaters) {
+    g.fillStyle = "rgba(255,233,176," + Math.min(1, f.t / 30).toFixed(2) + ")";
+    g.font = "bold 15px 'Courier New', monospace";
+    g.fillText(f.text, f.x - 14, f.y);
+  }
+  drawHUD();
+  if (state === "gameover") drawGameOver();
+  if (paused && state === "play") {
+    g.fillStyle = "rgba(5,6,20,0.6)"; g.fillRect(0, 0, W, H);
+    g.fillStyle = "#e9e9f2"; g.font = "bold 40px 'Courier New', monospace";
+    g.textAlign = "center"; g.fillText("PAUSED", W / 2, H / 2); g.textAlign = "left";
+  }
+}
+
+/* ---------------- main loop ---------------- */
+function loop() {
+  if (!paused || state !== "play") update();
+  else frame++;
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
