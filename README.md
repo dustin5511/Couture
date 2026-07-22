@@ -1,9 +1,9 @@
 # Couture
 
-## 🦥 Sleepy Sloth — A Bedtime Climb
+## 🦥 Courtnay the Sloth — A Bedtime Climb
 
-A single-page, Donkey Kong–style arcade platformer. You play a sloth with long
-silver hair who hasn't slept in days. Her cozy bed sits at the very top of the
+A single-page, Donkey Kong–style arcade platformer. You play Courtnay, a sloth
+with long silver hair who hasn't slept in days. Her cozy bed sits at the very top of the
 tower — but the **WAKE CO. Insomnia Machine** hurls rolling alarm clocks down
 the ramps to keep her awake. Climb the ladders, dodge (or jump over) the
 clocks, and tuck her in.
