@@ -382,9 +382,9 @@ function drawBed() {
     g.fillStyle = "rgba(255,255,255,0.85)";
     g.font = "bold 18px 'Courier New', monospace";
     const b = Math.sin(frame * 0.05) * 4;
-    g.fillText("z", 500, 108 + b);
+    g.fillText("z", 322, 118 + b);
     g.font = "bold 24px 'Courier New', monospace";
-    g.fillText("Z", 512, 94 + b);
+    g.fillText("Z", 334, 104 + b);
   }
   // little lamp on nightstand
   g.fillStyle = "#5d3a22"; g.fillRect(548, 136, 26, 32);
@@ -438,6 +438,69 @@ function drawClock(c) {
   g.strokeStyle = "#33261a"; g.lineWidth = 2;
   g.beginPath(); g.moveTo(0, 0); g.lineTo(Math.cos(c.ang * 3) * 6, Math.sin(c.ang * 3) * 6); g.stroke();
   g.beginPath(); g.moveTo(0, 0); g.lineTo(Math.cos(c.ang * 1.5 + 2) * 4, Math.sin(c.ang * 1.5 + 2) * 4); g.stroke();
+  g.restore();
+}
+
+// The guy on the bed: curly salt-and-pepper hair, beard, black band tee,
+// silver wristwatch. x = center, y = feet. pose: "idle" | "cheer".
+function drawGuy(x, y, pose) {
+  g.save(); g.translate(x, y + Math.sin(frame * 0.05) * 1.5);
+  // legs + shoes
+  g.strokeStyle = "#3d4a63"; g.lineWidth = 6; g.lineCap = "round";
+  g.beginPath(); g.moveTo(-5, -16); g.lineTo(-6, -3); g.stroke();
+  g.beginPath(); g.moveTo( 5, -16); g.lineTo( 6, -3); g.stroke();
+  g.fillStyle = "#26221f";
+  g.beginPath(); g.roundRect(-12, -4, 11, 5, 2); g.fill();
+  g.beginPath(); g.roundRect(  1, -4, 11, 5, 2); g.fill();
+  // arms behind torso
+  g.strokeStyle = "#d8a98a"; g.lineWidth = 5;
+  if (pose === "cheer") {
+    const c = Math.sin(frame * 0.12) * 3;
+    g.beginPath(); g.moveTo(-10, -36); g.lineTo(-19, -52 - c); g.stroke();
+    g.beginPath(); g.moveTo( 10, -36); g.lineTo( 19, -52 + c); g.stroke();
+    g.fillStyle = "#cfd2e8"; g.fillRect(-18, -49 - c, 5, 3);        // watch
+  } else {
+    g.beginPath(); g.moveTo(-10, -36); g.lineTo(-15, -27); g.lineTo(-9, -21); g.stroke();  // hand on hip
+    g.beginPath(); g.moveTo( 10, -36); g.lineTo( 13, -19); g.stroke();
+    g.fillStyle = "#cfd2e8"; g.fillRect(10.5, -24, 5, 3);           // watch
+  }
+  // torso — black tee
+  g.fillStyle = "#17161a";
+  g.beginPath(); g.roundRect(-12, -40, 24, 26, 6); g.fill();
+  // yellow band-tee lettering scribble
+  g.strokeStyle = "#d8e34a"; g.lineWidth = 1.8;
+  for (let i = 0; i < 5; i++) {
+    const sx = -8 + i * 4;
+    g.beginPath(); g.moveTo(sx, -33); g.lineTo(sx + 1.5, -27); g.stroke();
+  }
+  // neck + head
+  g.fillStyle = "#d8a98a";
+  g.fillRect(-3, -44, 6, 5);
+  g.beginPath(); g.arc(0, -49, 9, 0, 7); g.fill();
+  // salt-and-pepper beard along the jaw
+  g.fillStyle = "#4c4540";
+  g.beginPath(); g.arc(0, -47, 9.4, 0.3, Math.PI - 0.3); g.fill();
+  g.fillStyle = "#9a958f";
+  g.fillRect(-5, -42, 1.4, 1.4); g.fillRect(2, -40.5, 1.4, 1.4); g.fillRect(6, -43, 1.4, 1.4);
+  // mouth
+  g.strokeStyle = "#2a2522"; g.lineWidth = 1.4;
+  g.beginPath(); g.moveTo(-2, -44.5); g.lineTo(2.5, -44.5); g.stroke();
+  // dark curly hair with silver streaks
+  g.fillStyle = "#35302d";
+  g.beginPath(); g.arc(-7, -56, 4.5, 0, 7); g.arc(0, -58, 5, 0, 7); g.arc(7, -56, 4.5, 0, 7);
+  g.arc(-9.5, -51, 3.5, 0, 7); g.arc(9.5, -51, 3.5, 0, 7); g.fill();
+  g.fillStyle = "#b6b6bf";
+  g.beginPath(); g.arc(3, -58.5, 1.8, 0, 7); g.fill();
+  g.beginPath(); g.arc(-5.5, -57, 1.5, 0, 7); g.fill();
+  // thick brows + eyes + nose
+  g.strokeStyle = "#2e2a28"; g.lineWidth = 2.2;
+  g.beginPath(); g.moveTo(-6.5, -52); g.lineTo(-2.5, -51.6); g.stroke();
+  g.beginPath(); g.moveTo( 2.5, -51.6); g.lineTo( 6.5, -52); g.stroke();
+  g.fillStyle = "#241f1c";
+  g.beginPath(); g.arc(-4, -49.5, 1.2, 0, 7); g.fill();
+  g.beginPath(); g.arc( 4, -49.5, 1.2, 0, 7); g.fill();
+  g.strokeStyle = "#b98a70"; g.lineWidth = 1.3;
+  g.beginPath(); g.moveTo(0, -49); g.lineTo(-0.6, -46.5); g.stroke();
   g.restore();
 }
 
@@ -572,6 +635,7 @@ function drawSleepScene() {
     g.quadraticCurveTo(372 - i * 2 + sway, 130, 366 - i * 2 + sway, 146 + (i % 3) * 3);
     g.stroke();
   }
+  drawGuy(520, 129, "cheer");
   for (const z of zzz) {
     const a = Math.max(0, 1 - z.t / 120);
     g.fillStyle = "rgba(255,255,255," + a.toFixed(2) + ")";
@@ -643,6 +707,7 @@ function draw() {
   drawPlatforms();
   drawMachine();
   drawBed();
+  if (state !== "sleep") drawGuy(495, 136, "idle");
   for (const c of clocks) drawClock(c);
   if (state === "sleep") {
     drawSleepScene();
