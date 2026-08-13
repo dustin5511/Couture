@@ -1,8 +1,8 @@
 # Couture
 
-## 🫖 Tea Time Takedown — A Transatlantic Climb
+## 🫖 Sophie's Tea Time — A Transatlantic Climb
 
-A single-page, Donkey Kong–style arcade platformer. You play an Englishwoman
+A single-page, Donkey Kong–style arcade platformer. You play Sophie, an Englishwoman
 in a St George's cross shirt. At the top of the tower stands **the Prez** — a
 blonde-swooped, red-tied head of state lobbing **giant cups of tea** down the
 ramps. Climb the ladders, dodge (or jump over) the rolling china, reach the
