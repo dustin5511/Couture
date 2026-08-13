@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Courtnay the Sloth — A Bedtime Climb</title>
+<title>Tea Time Takedown</title>
 <style>
   html, body {
     margin: 0; padding: 0; background: #070a1c; height: 100%;
@@ -64,15 +64,15 @@ function P(x1, y1, x2, y2, dir, fall) {
   return { x1, y1, x2, y2, dir, fall,
            y(x) { return this.y1 + (x - this.x1) * (this.y2 - this.y1) / (this.x2 - this.x1); } };
 }
-// dir: which way clocks roll (+1 right, -1 left). fall: which end they drop off.
+// dir: which way cups roll (+1 right, -1 left). fall: which end they drop off.
 const plats = [
-  P(  0, 672, 880, 688, +1, "exit"),   // 0 ground — clocks exit off-screen right
+  P(  0, 672, 880, 688, +1, "exit"),   // 0 ground — cups exit off-screen right
   P( 30, 598, 880, 582, -1, "left"),
   P(  0, 488, 850, 505, +1, "right"),
   P( 30, 415, 880, 398, -1, "left"),
   P(  0, 322, 850, 338, +1, "right"),
-  P( 30, 250, 880, 232, -1, "left"),   // 5 top run — clocks spawn here
-  P(320, 168, 560, 168,  0, null),     // 6 bed platform
+  P( 30, 250, 880, 232, -1, "left"),   // 5 top run
+  P(320, 168, 560, 168,  0, null),     // 6 penthouse — the Prez stands here
 ];
 // ladders: {x, top platform index, bottom platform index}
 const ladders = [
@@ -84,28 +84,29 @@ const ladders = [
   { x: 440, t: 6, b: 5 },
 ].map(L => ({ x: L.x, top: plats[L.t].y(L.x), bot: plats[L.b].y(L.x) }));
 
-const BED = { x1: 340, x2: 556, y: 168 };
 const stars = [];
 { let s = 9301; const rnd = () => (s = (s * 49297 + 233) % 233280) / 233280;
   for (let i = 0; i < 90; i++) stars.push({ x: rnd() * W, y: rnd() * 560, r: rnd() * 1.4 + 0.4, tw: rnd() * 6.28 }); }
 
 /* ---------------- state ---------------- */
 const keys = {};
-let state = "title";          // title | play | dying | sleep | gameover
-let night, score, lives, maxPlat, invT, deadT, sleepT, spawnT, frame = 0, muted = false, paused = false;
+let state = "title";          // title | play | dying | toss | gameover
+let round, score, lives, maxPlat, invT, deadT, tossT, spawnT, frame = 0, muted = false, paused = false;
 const player = { x: 0, y: 0, vx: 0, vy: 0, dir: 1, grounded: false, plat: 0, climbing: null, phase: 0 };
-let clocks = [], floaters = [], zzz = [];
+const PREZ_X = 470;           // where the Prez stands on the penthouse
+const flung = { x: 0, y: 0, vx: 0, vy: 0, rot: 0 };   // the Prez, once airborne
+let cups = [], floaters = [];
 
 function resetPlayer() {
   player.x = 40; player.y = plats[0].y(40);
   player.vx = 0; player.vy = 0; player.dir = 1;
   player.grounded = true; player.plat = 0; player.climbing = null;
 }
-function startNight(n) {
-  night = n; clocks = []; floaters = []; zzz = [];
-  maxPlat = 0; spawnT = 50; invT = 90; resetPlayer(); state = "play";
+function startRound(n) {
+  round = n; cups = []; floaters = [];
+  maxPlat = 0; spawnT = 70; invT = 90; resetPlayer(); state = "play";
 }
-function newGame() { score = 0; lives = 3; startNight(1); }
+function newGame() { score = 0; lives = 3; startRound(1); }
 
 /* ---------------- audio ---------------- */
 let ac = null;
@@ -128,7 +129,8 @@ const sfx = {
   hit:  () => { beep(320, 0.3, "sawtooth", 0.07, 60); },
   score:() => beep(660, 0.12, "square", 0.045, 880),
   win:  () => { [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => beep(f, 0.35, "triangle", 0.06), i * 160)); },
-  spawn:() => beep(1400, 0.06, "square", 0.02),
+  toss: () => beep(900, 0.12, "square", 0.03, 200),
+  fling:() => beep(180, 0.5, "sawtooth", 0.06, 900),
 };
 
 /* ---------------- input ---------------- */
@@ -213,25 +215,26 @@ function updatePlayer() {
       if (down() && p.grounded && Math.abs(p.y - L.top) < 8) { p.climbing = L; p.y = L.top + 6; p.vy = 0; break; }
     }
 
-    // reached the bed!
+    // reached the Prez!
     if (p.grounded && p.plat === 6) {
-      state = "sleep"; sleepT = 0;
+      state = "toss"; tossT = 0; cups = [];
+      p.x = 430; p.y = 168; p.dir = 1;
       score += 1000 + lives * 250; sfx.win();
     }
   }
 }
 
-function updateClocks() {
-  // spawn
+function updateCups() {
+  // the Prez lobs a fresh cup when the timer runs out
   if (--spawnT <= 0) {
-    spawnT = Math.max(55, 150 - night * 16) + Math.random() * 45;
-    clocks.push({ x: 845, y: plats[5].y(845) - 13, vx: -(1.5 + night * 0.12), vy: 0,
-                  pi: 5, falling: false, r: 13, ang: 0, jumped: false });
-    sfx.spawn();
+    spawnT = Math.max(60, 155 - round * 16) + Math.random() * 45;
+    cups.push({ x: PREZ_X + 22, y: 118, vx: 2.8 + Math.random() * 2 + round * 0.15, vy: -2.2,
+                pi: -1, falling: true, thrown: true, r: 15, ang: 0, jumped: false });
+    sfx.toss();
   }
-  const accel = 0.035 + night * 0.004;
-  const vmax  = Math.min(4.2, 2.6 + night * 0.25);
-  for (const c of clocks) {
+  const accel = 0.035 + round * 0.004;
+  const vmax  = Math.min(4.2, 2.6 + round * 0.25);
+  for (const c of cups) {
     if (!c.falling) {
       const pl = plats[c.pi];
       c.vx += pl.dir * accel;
@@ -244,37 +247,39 @@ function updateClocks() {
     } else {
       c.vy += 0.42;
       const prevB = c.y + c.r;
-      c.y += c.vy; c.x += c.vx * 0.25; c.ang += c.vx / c.r * 0.5;
-      c.x = Math.max(6, Math.min(874, c.x));
+      c.y += c.vy;
+      c.x += c.vx * (c.thrown ? 1 : 0.25);       // full arc when freshly lobbed
+      c.ang += c.vx / c.r * 0.5;
+      if (!c.thrown) c.x = Math.max(6, Math.min(874, c.x));
       for (let i = 0; i < plats.length; i++) {
         const pl = plats[i];
-        if (c.x < pl.x1 || c.x > pl.x2) continue;
+        if (i === 6 || c.x < pl.x1 || c.x > pl.x2) continue;   // never land back on the penthouse
         const ys = pl.y(c.x);
         if (c.vy > 0 && prevB <= ys + 8 && c.y + c.r >= ys) {
-          c.y = ys - c.r; c.falling = false; c.pi = i; c.vy = 0;
+          c.y = ys - c.r; c.falling = false; c.thrown = false; c.pi = i; c.vy = 0;
           c.vx = pl.dir * Math.max(Math.abs(c.vx), 1.5);
           break;
         }
       }
     }
   }
-  clocks = clocks.filter(c => c.x < W + 50 && c.y < H + 60);
+  cups = cups.filter(c => c.x < W + 60 && c.x > -60 && c.y < H + 60);
 }
 
 function checkCollisions() {
   if (invT > 0) return;
   const p = player;
-  for (const c of clocks) {
-    // clock circle vs player box (feet at p.y, ~22 wide, 30 tall)
+  for (const c of cups) {
+    // cup circle vs player box (feet at p.y, ~22 wide, 30 tall)
     const nx = Math.max(p.x - 10, Math.min(c.x, p.x + 10));
     const ny = Math.max(p.y - 30, Math.min(c.y, p.y));
     const dx = c.x - nx, dy = c.y - ny;
-    if (dx * dx + dy * dy < (c.r - 2) * (c.r - 2)) {
+    if (dx * dx + dy * dy < (c.r - 3) * (c.r - 3)) {
       state = "dying"; deadT = 70; lives--; sfx.hit();
       return;
     }
-    // jumped clean over a clock → bonus
-    if (!c.jumped && !p.grounded && !p.climbing && Math.abs(c.x - p.x) < 24 && c.y - c.r > p.y + 6) {
+    // jumped clean over a cup → bonus
+    if (!c.jumped && !p.grounded && !p.climbing && Math.abs(c.x - p.x) < 26 && c.y - c.r > p.y + 6) {
       c.jumped = true; score += 50; sfx.score();
       floaters.push({ x: c.x, y: c.y - 30, t: 50, text: "+50" });
     }
@@ -286,19 +291,24 @@ function update() {
   if (state === "play") {
     if (invT > 0) invT--;
     updatePlayer();
-    if (state === "play") { updateClocks(); checkCollisions(); }
+    if (state === "play") { updateCups(); checkCollisions(); }
   } else if (state === "dying") {
-    updateClocks();
+    updateCups();
     if (--deadT <= 0) {
       if (lives <= 0) state = "gameover";
       else { resetPlayer(); invT = 120; state = "play"; }
     }
-  } else if (state === "sleep") {
-    sleepT++;
-    if (sleepT % 30 === 0) zzz.push({ x: 470 + Math.random() * 30, y: 140, t: 0 });
-    for (const z of zzz) z.t++;
-    zzz = zzz.filter(z => z.t < 120);
-    if (sleepT > 260) startNight(night + 1);
+  } else if (state === "toss") {
+    tossT++;
+    if (tossT === 46) {                      // launch!
+      flung.x = 430; flung.y = 116; flung.vx = 6; flung.vy = -7.5; flung.rot = 0;
+      sfx.fling();
+    }
+    if (tossT > 45) {
+      flung.vy += 0.45;
+      flung.x += flung.vx; flung.y += flung.vy; flung.rot += 0.26;
+    }
+    if (tossT > 230) startRound(round + 1);
   }
   for (const f of floaters) { f.y -= 0.7; f.t--; }
   floaters = floaters.filter(f => f.t > 0);
@@ -352,254 +362,209 @@ function drawPlatforms() {
   }
 }
 
-function drawBed() {
-  const glow = 0.25 + 0.15 * Math.sin(frame * 0.06);
-  g.fillStyle = "rgba(255,230,150," + glow.toFixed(2) + ")";
-  g.beginPath(); g.ellipse(448, 150, 120, 46, 0, 0, 7); g.fill();
-
-  // legs & frame
-  g.fillStyle = "#5d3a22";
-  g.fillRect(364, 152, 8, 16); g.fillRect(528, 152, 8, 16);
-  // headboard
-  g.fillStyle = "#7a4a2e";
-  g.beginPath(); g.moveTo(358, 156); g.lineTo(358, 112);
-  g.quadraticCurveTo(372, 100, 386, 112); g.lineTo(386, 156); g.closePath(); g.fill();
-  // mattress
-  g.fillStyle = "#f2ead8";
-  g.beginPath(); g.roundRect(360, 140, 176, 16, 5); g.fill();
-  // blanket
-  g.fillStyle = "#8f7ddb";
-  g.beginPath(); g.roundRect(414, 136, 122, 18, 6); g.fill();
-  g.strokeStyle = "#7a68c4"; g.lineWidth = 2;
-  g.beginPath(); g.moveTo(430, 138); g.lineTo(430, 152);
-  g.moveTo(456, 138); g.lineTo(456, 152); g.stroke();
-  // pillow
-  g.fillStyle = "#ffffff";
-  g.beginPath(); g.roundRect(368, 128, 44, 16, 8); g.fill();
-
-  if (state !== "sleep") {
-    // floating Zzz marking the goal
-    g.fillStyle = "rgba(255,255,255,0.85)";
-    g.font = "bold 18px 'Courier New', monospace";
-    const b = Math.sin(frame * 0.05) * 4;
-    g.fillText("z", 322, 118 + b);
-    g.font = "bold 24px 'Courier New', monospace";
-    g.fillText("Z", 334, 104 + b);
-  }
-  // little lamp on nightstand
-  g.fillStyle = "#5d3a22"; g.fillRect(548, 136, 26, 32);
-  g.fillStyle = "#3d2312"; g.fillRect(551, 130, 20, 8);
-  g.fillStyle = "#ffd98a";
-  g.beginPath(); g.moveTo(553, 130); g.lineTo(569, 130); g.lineTo(565, 118); g.lineTo(557, 118); g.closePath(); g.fill();
-  g.fillStyle = "rgba(255,217,138," + (0.25 + 0.1 * Math.sin(frame * 0.1)).toFixed(2) + ")";
-  g.beginPath(); g.arc(561, 124, 18, 0, 7); g.fill();
-}
-
-function drawMachine() {
-  // the Insomnia Machine, hurling alarm clocks from the top-right
-  const bx = 812, by = plats[5].y(830) - 56;
-  g.fillStyle = "#3a2d5e";
-  g.beginPath(); g.roundRect(bx, by, 62, 56, 6); g.fill();
-  g.fillStyle = "#241a3f";
-  g.beginPath(); g.roundRect(bx + 6, by + 6, 50, 22, 4); g.fill();
-  const blink = (frame % 60) < 30;
-  g.fillStyle = blink ? "#ff5252" : "#7a2020";
-  g.beginPath(); g.arc(bx + 31, by + 17, 6, 0, 7); g.fill();
-  // chute
-  g.fillStyle = "#241a3f";
-  g.beginPath(); g.moveTo(bx, by + 34); g.lineTo(bx - 16, by + 42); g.lineTo(bx - 16, by + 52); g.lineTo(bx, by + 50); g.closePath(); g.fill();
-  g.fillStyle = "#cfd2e8"; g.font = "bold 11px 'Courier New', monospace";
-  g.fillText("WAKE CO.", bx + 6, by + 48);
-}
-
-function drawClock(c) {
+// A rolling cup of tea. Rotates as it rolls; steam puffs while airborne.
+function drawCup(c) {
   g.save(); g.translate(c.x, c.y); g.rotate(c.ang);
-  // bells
-  g.fillStyle = "#e8b84a";
-  g.beginPath(); g.arc(-7, -c.r + 1, 5, Math.PI, 0); g.fill();
-  g.beginPath(); g.arc( 7, -c.r + 1, 5, Math.PI, 0); g.fill();
-  // body
-  g.fillStyle = "#d64545";
+  // saucer-coloured china body
+  g.fillStyle = "#f4f1ea";
   g.beginPath(); g.arc(0, 0, c.r, 0, 7); g.fill();
-  g.strokeStyle = "#9c2c2c"; g.lineWidth = 2;
+  g.strokeStyle = "#b9b3a6"; g.lineWidth = 2;
   g.beginPath(); g.arc(0, 0, c.r, 0, 7); g.stroke();
-  // face
-  g.fillStyle = "#fff7ea";
-  g.beginPath(); g.arc(0, 0, c.r - 4, 0, 7); g.fill();
-  g.strokeStyle = "#5a4632"; g.lineWidth = 1.5;
-  for (let i = 0; i < 4; i++) {
-    const a = i * Math.PI / 2;
-    g.beginPath();
-    g.moveTo(Math.cos(a) * (c.r - 6), Math.sin(a) * (c.r - 6));
-    g.lineTo(Math.cos(a) * (c.r - 8.5), Math.sin(a) * (c.r - 8.5));
-    g.stroke();
-  }
-  // hands spin as it rolls
-  g.strokeStyle = "#33261a"; g.lineWidth = 2;
-  g.beginPath(); g.moveTo(0, 0); g.lineTo(Math.cos(c.ang * 3) * 6, Math.sin(c.ang * 3) * 6); g.stroke();
-  g.beginPath(); g.moveTo(0, 0); g.lineTo(Math.cos(c.ang * 1.5 + 2) * 4, Math.sin(c.ang * 1.5 + 2) * 4); g.stroke();
+  // blue china ring
+  g.strokeStyle = "#3f5fa8"; g.lineWidth = 2.4;
+  g.beginPath(); g.arc(0, 0, c.r - 4, 0, 7); g.stroke();
+  // the tea itself
+  g.fillStyle = "#a5691e";
+  g.beginPath(); g.arc(0, 0, c.r - 7, 0, 7); g.fill();
+  g.fillStyle = "rgba(255,235,190,0.5)";
+  g.beginPath(); g.ellipse(-2, -2, 4, 2.5, -0.6, 0, 7); g.fill();
+  // handle
+  g.strokeStyle = "#f4f1ea"; g.lineWidth = 3.5;
+  g.beginPath(); g.arc(c.r + 2, 0, 5, Math.PI * 0.6, Math.PI * 1.4, true); g.stroke();
   g.restore();
+  // steam while flying
+  if (c.falling) {
+    g.fillStyle = "rgba(255,255,255,0.25)";
+    for (let i = 0; i < 2; i++) {
+      const t = (frame * 0.1 + i * 2) % 6.28;
+      g.beginPath(); g.arc(c.x + Math.sin(t) * 4, c.y - c.r - 6 - i * 7, 3.5 - i, 0, 7); g.fill();
+    }
+  }
 }
 
-// The guy on the bed: curly salt-and-pepper hair, beard, black band tee,
-// silver wristwatch. x = center, y = feet. pose: "idle" | "cheer".
-function drawGuy(x, y, pose) {
-  g.save(); g.translate(x, y + Math.sin(frame * 0.05) * 1.5);
-  // legs + shoes
-  g.strokeStyle = "#3d4a63"; g.lineWidth = 6; g.lineCap = "round";
-  g.beginPath(); g.moveTo(-5, -16); g.lineTo(-6, -3); g.stroke();
-  g.beginPath(); g.moveTo( 5, -16); g.lineTo( 6, -3); g.stroke();
-  g.fillStyle = "#26221f";
-  g.beginPath(); g.roundRect(-12, -4, 11, 5, 2); g.fill();
-  g.beginPath(); g.roundRect(  1, -4, 11, 5, 2); g.fill();
-  // arms behind torso
-  g.strokeStyle = "#d8a98a"; g.lineWidth = 5;
-  if (pose === "cheer") {
-    const c = Math.sin(frame * 0.12) * 3;
-    g.beginPath(); g.moveTo(-10, -36); g.lineTo(-19, -52 - c); g.stroke();
-    g.beginPath(); g.moveTo( 10, -36); g.lineTo( 19, -52 + c); g.stroke();
-    g.fillStyle = "#cfd2e8"; g.fillRect(-18, -49 - c, 5, 3);        // watch
-  } else {
-    g.beginPath(); g.moveTo(-10, -36); g.lineTo(-15, -27); g.lineTo(-9, -21); g.stroke();  // hand on hip
-    g.beginPath(); g.moveTo( 10, -36); g.lineTo( 13, -19); g.stroke();
-    g.fillStyle = "#cfd2e8"; g.fillRect(10.5, -24, 5, 3);           // watch
-  }
-  // torso — black tee
-  g.fillStyle = "#17161a";
-  g.beginPath(); g.roundRect(-12, -40, 24, 26, 6); g.fill();
-  // yellow band-tee lettering scribble
-  g.strokeStyle = "#d8e34a"; g.lineWidth = 1.8;
-  for (let i = 0; i < 5; i++) {
-    const sx = -8 + i * 4;
-    g.beginPath(); g.moveTo(sx, -33); g.lineTo(sx + 1.5, -27); g.stroke();
-  }
-  // neck + head
-  g.fillStyle = "#d8a98a";
-  g.fillRect(-3, -44, 6, 5);
-  g.beginPath(); g.arc(0, -49, 9, 0, 7); g.fill();
-  // salt-and-pepper beard along the jaw
-  g.fillStyle = "#4c4540";
-  g.beginPath(); g.arc(0, -47, 9.4, 0.3, Math.PI - 0.3); g.fill();
-  g.fillStyle = "#9a958f";
-  g.fillRect(-5, -42, 1.4, 1.4); g.fillRect(2, -40.5, 1.4, 1.4); g.fillRect(6, -43, 1.4, 1.4);
-  // mouth
-  g.strokeStyle = "#2a2522"; g.lineWidth = 1.4;
-  g.beginPath(); g.moveTo(-2, -44.5); g.lineTo(2.5, -44.5); g.stroke();
-  // dark curly hair with silver streaks
-  g.fillStyle = "#35302d";
-  g.beginPath(); g.arc(-7, -56, 4.5, 0, 7); g.arc(0, -58, 5, 0, 7); g.arc(7, -56, 4.5, 0, 7);
-  g.arc(-9.5, -51, 3.5, 0, 7); g.arc(9.5, -51, 3.5, 0, 7); g.fill();
-  g.fillStyle = "#b6b6bf";
-  g.beginPath(); g.arc(3, -58.5, 1.8, 0, 7); g.fill();
-  g.beginPath(); g.arc(-5.5, -57, 1.5, 0, 7); g.fill();
-  // thick brows + eyes + nose
-  g.strokeStyle = "#2e2a28"; g.lineWidth = 2.2;
-  g.beginPath(); g.moveTo(-6.5, -52); g.lineTo(-2.5, -51.6); g.stroke();
-  g.beginPath(); g.moveTo( 2.5, -51.6); g.lineTo( 6.5, -52); g.stroke();
-  g.fillStyle = "#241f1c";
-  g.beginPath(); g.arc(-4, -49.5, 1.2, 0, 7); g.fill();
-  g.beginPath(); g.arc( 4, -49.5, 1.2, 0, 7); g.fill();
-  g.strokeStyle = "#b98a70"; g.lineWidth = 1.3;
-  g.beginPath(); g.moveTo(0, -49); g.lineTo(-0.6, -46.5); g.stroke();
-  g.restore();
-}
-
-// The heroine: a sloth with long silver hair. x = center, y = feet.
-function drawSloth(x, y, dir, pose, phase) {
+// The heroine: shoulder-length hair, England-flag shirt. x = center, y = feet.
+function drawHeroine(x, y, dir, pose, phase) {
   g.save(); g.translate(x, y); g.scale(dir, 1);
-  const sway = Math.sin(frame * 0.07) * 2;
-
-  // --- long silver hair (drawn behind the body, flowing down her back) ---
+  const sway = Math.sin(frame * 0.07) * 1.5;
   g.lineCap = "round";
-  for (let i = 0; i < 6; i++) {
-    const off = i - 2.5;
-    g.strokeStyle = i % 2 ? "#e9e9f2" : "#cfd0dd";
-    g.lineWidth = 3.4;
-    g.beginPath();
-    g.moveTo(-1 + off * 1.2, -40);
-    g.quadraticCurveTo(-10 + off * 2 + sway, -22, -12 + off * 2.4 + sway * 1.6, -2 + (i % 3));
-    g.stroke();
-  }
 
   if (pose === "climb") {
     // back view on the ladder
-    g.fillStyle = "#94816f";
-    g.beginPath(); g.ellipse(0, -16, 11, 13, 0, 0, 7); g.fill();       // body
-    g.beginPath(); g.arc(0, -33, 10, 0, 7); g.fill();                  // head (hair covers it)
-    for (let i = 0; i < 5; i++) {                                      // hair over the back
-      const off = i - 2;
-      g.strokeStyle = i % 2 ? "#e9e9f2" : "#d8d8e4"; g.lineWidth = 3.6;
-      g.beginPath();
-      g.moveTo(off * 2.4, -41);
-      g.quadraticCurveTo(off * 2.8 + sway, -20, off * 3 + sway, -4);
-      g.stroke();
-    }
     const c = Math.sin(phase * 2);
-    g.strokeStyle = "#7c6a58"; g.lineWidth = 5;
-    g.beginPath(); g.moveTo(-4, -26); g.lineTo(-11, -38 - c * 5); g.stroke();   // arms
-    g.beginPath(); g.moveTo( 4, -26); g.lineTo( 11, -38 + c * 5); g.stroke();
-    g.beginPath(); g.moveTo(-4, -8);  g.lineTo(-8, 0 + c * 3);  g.stroke();     // legs
-    g.beginPath(); g.moveTo( 4, -8);  g.lineTo( 8, 0 - c * 3);  g.stroke();
+    g.strokeStyle = "#4a5d8a"; g.lineWidth = 5;                     // legs
+    g.beginPath(); g.moveTo(-3, -12); g.lineTo(-6, 0 + c * 3); g.stroke();
+    g.beginPath(); g.moveTo( 3, -12); g.lineTo( 6, 0 - c * 3); g.stroke();
+    g.fillStyle = "#f4f4f8";                                        // shirt (back)
+    g.beginPath(); g.roundRect(-8, -30, 16, 18, 4); g.fill();
+    g.fillStyle = "#cc2233";
+    g.fillRect(-1.7, -30, 3.4, 18); g.fillRect(-8, -24.5, 16, 3.2);
+    g.strokeStyle = "#e8b992"; g.lineWidth = 4;                     // arms up
+    g.beginPath(); g.moveTo(-6, -28); g.lineTo(-11, -40 - c * 5); g.stroke();
+    g.beginPath(); g.moveTo( 6, -28); g.lineTo( 11, -40 + c * 5); g.stroke();
+    g.fillStyle = "#6b4632";                                        // hair covers the head
+    g.beginPath(); g.arc(0, -38, 9.5, 0, 7); g.fill();
+    g.beginPath(); g.roundRect(-8, -40, 16, 18, 6); g.fill();
     g.restore(); return;
   }
 
   const wob = pose === "walk" ? Math.sin(phase * 2) : 0;
+  const armUp = pose === "lift";
   // back arm
-  g.strokeStyle = "#7c6a58"; g.lineWidth = 5;
-  g.beginPath(); g.moveTo(2, -24);
-  g.quadraticCurveTo(-4 - wob * 4, -14, -6 - wob * 5, -2); g.stroke();
-  // legs
-  g.strokeStyle = "#877663"; g.lineWidth = 5.5;
+  g.strokeStyle = "#d8a982"; g.lineWidth = 4;
+  if (armUp) { g.beginPath(); g.moveTo(-4, -28); g.lineTo(-7, -44); g.stroke(); }
+  else { g.beginPath(); g.moveTo(-4, -28); g.lineTo(-7 - wob * 4, -16); g.stroke(); }
+  // legs — jeans
+  g.strokeStyle = "#4a5d8a"; g.lineWidth = 5;
   if (pose === "jump") {
-    g.beginPath(); g.moveTo(-3, -10); g.lineTo(-8, -4); g.stroke();
-    g.beginPath(); g.moveTo( 3, -10); g.lineTo( 7, -3); g.stroke();
+    g.beginPath(); g.moveTo(-3, -12); g.lineTo(-8, -5); g.stroke();
+    g.beginPath(); g.moveTo( 3, -12); g.lineTo( 7, -4); g.stroke();
   } else {
-    g.beginPath(); g.moveTo(-3, -10); g.lineTo(-4 - wob * 4, 0); g.stroke();
-    g.beginPath(); g.moveTo( 3, -10); g.lineTo( 4 + wob * 4, 0); g.stroke();
+    g.beginPath(); g.moveTo(-3, -12); g.lineTo(-4 - wob * 4, 0); g.stroke();
+    g.beginPath(); g.moveTo( 3, -12); g.lineTo( 4 + wob * 4, 0); g.stroke();
   }
-  // body
-  g.fillStyle = "#94816f";
-  g.beginPath(); g.ellipse(0, -17, 11, 13.5, 0, 0, 7); g.fill();
-  g.fillStyle = "#b3a28d";
-  g.beginPath(); g.ellipse(2, -15, 6.5, 9, 0, 0, 7); g.fill();          // belly
+  // shoes
+  g.fillStyle = "#7a4a2e";
+  g.beginPath(); g.ellipse(-4 - wob * 4, 0, 4, 2.4, 0, 0, 7); g.fill();
+  g.beginPath(); g.ellipse( 4 + wob * 4, 0, 4, 2.4, 0, 0, 7); g.fill();
+  // torso — white shirt with St George's cross
+  g.fillStyle = "#f4f4f8";
+  g.beginPath(); g.roundRect(-8, -30, 16, 18, 4); g.fill();
+  g.fillStyle = "#cc2233";
+  g.fillRect(-1.7, -30, 3.4, 18);
+  g.fillRect(-8, -24.5, 16, 3.2);
+  // hair behind the head (falls just past the shoulders)
+  g.fillStyle = "#6b4632";
+  g.beginPath();
+  g.moveTo(-9, -42);
+  g.quadraticCurveTo(-12 + sway, -33, -10 + sway, -23);
+  g.lineTo(-3, -26);
+  g.quadraticCurveTo(-7, -35, -5, -43);
+  g.closePath(); g.fill();
+  g.beginPath(); g.ellipse(0, -41, 9.5, 8.5, 0, 0, 7); g.fill();    // hair cap
   // head
-  g.fillStyle = "#94816f";
-  g.beginPath(); g.arc(2, -33, 10, 0, 7); g.fill();
-  // face patch
-  g.fillStyle = "#dcc9a8";
-  g.beginPath(); g.ellipse(5, -33, 7, 7.6, 0, 0, 7); g.fill();
-  // sloth eye stripe
-  g.strokeStyle = "#5a4632"; g.lineWidth = 3.6;
-  g.beginPath(); g.moveTo(4, -36); g.lineTo(10, -31); g.stroke();
-  // sleepy eye
-  g.fillStyle = "#fff";
-  g.beginPath(); g.arc(7, -33.5, 2.4, 0, 7); g.fill();
-  g.fillStyle = "#2b2118";
-  g.beginPath(); g.arc(7.4, -33, 1.4, 0, 7); g.fill();
-  g.strokeStyle = "#5a4632"; g.lineWidth = 1.4;                          // heavy eyelid
-  g.beginPath(); g.arc(7, -34, 2.6, Math.PI * 1.05, Math.PI * 1.95); g.stroke();
-  // nose + smile
-  g.fillStyle = "#42332a";
-  g.beginPath(); g.ellipse(11.4, -31.5, 1.8, 1.4, 0, 0, 7); g.fill();
-  g.strokeStyle = "#42332a"; g.lineWidth = 1.3;
-  g.beginPath(); g.arc(8.5, -29.5, 2.6, 0.2, Math.PI * 0.75); g.stroke();
-  // silver bangs over the forehead
-  g.strokeStyle = "#e9e9f2"; g.lineWidth = 3;
-  g.beginPath(); g.moveTo(-2, -42); g.quadraticCurveTo(6, -44, 10, -38); g.stroke();
-  g.strokeStyle = "#d8d8e4"; g.lineWidth = 2.6;
-  g.beginPath(); g.moveTo(-4, -41); g.quadraticCurveTo(2, -45, 8, -41); g.stroke();
-  // front arm with little claws
-  g.strokeStyle = "#877663"; g.lineWidth = 5;
-  const reach = pose === "jump" ? -10 : 0;
-  g.beginPath(); g.moveTo(4, -24);
-  g.quadraticCurveTo(10 + wob * 4, -14 + reach, 12 + wob * 5, -3 + reach); g.stroke();
-  g.strokeStyle = "#efe8da"; g.lineWidth = 1.6;
-  for (let i = 0; i < 3; i++) {
-    g.beginPath();
-    g.moveTo(11 + wob * 5 + i * 1.6, -3 + reach);
-    g.lineTo(12 + wob * 5 + i * 1.6, 2 + reach);
-    g.stroke();
+  g.fillStyle = "#e8b992";
+  g.beginPath(); g.arc(2, -38, 8, 0, 7); g.fill();
+  // bangs sweep
+  g.fillStyle = "#6b4632";
+  g.beginPath(); g.moveTo(-6, -42);
+  g.quadraticCurveTo(2, -49, 9, -42);
+  g.quadraticCurveTo(4, -44, -2, -41);
+  g.closePath(); g.fill();
+  // face
+  g.fillStyle = "#3a2a20";
+  g.beginPath(); g.arc(6, -39, 1.4, 0, 7); g.fill();                 // eye
+  g.strokeStyle = "#6b4632"; g.lineWidth = 1.3;                      // brow
+  g.beginPath(); g.moveTo(4, -42.5); g.lineTo(8, -42); g.stroke();
+  g.strokeStyle = "#b3543f"; g.lineWidth = 1.4;                      // smile
+  g.beginPath(); g.arc(6.5, -35.5, 2.4, 0.15, Math.PI * 0.7); g.stroke();
+  g.fillStyle = "rgba(220,120,110,0.35)";                            // blush
+  g.beginPath(); g.arc(8.6, -36.5, 1.8, 0, 7); g.fill();
+  // front arm
+  g.strokeStyle = "#e8b992"; g.lineWidth = 4;
+  if (armUp) { g.beginPath(); g.moveTo(4, -28); g.lineTo(8, -45); g.stroke(); }
+  else if (pose === "jump") { g.beginPath(); g.moveTo(4, -28); g.lineTo(11, -38); g.stroke(); }
+  else { g.beginPath(); g.moveTo(4, -28); g.lineTo(8 + wob * 4, -15); g.stroke(); }
+  g.restore();
+}
+
+// The Prez: blonde swoop, navy suit, very long red tie. x = center, y = feet.
+// pose: "idle" | "throw" | "fly". rot spins him when airborne.
+function drawPrez(x, y, pose, rot) {
+  g.save(); g.translate(x, y);
+  if (rot) { g.translate(0, -30); g.rotate(rot); g.translate(0, 30); }
+  const bob = pose === "fly" ? 0 : Math.sin(frame * 0.05) * 1.2;
+  g.translate(0, bob);
+  g.lineCap = "round";
+  // shoes
+  g.fillStyle = "#241f1c";
+  g.beginPath(); g.roundRect(-13, -4, 11, 5, 2); g.fill();
+  g.beginPath(); g.roundRect(  2, -4, 11, 5, 2); g.fill();
+  // legs
+  g.strokeStyle = "#22304d"; g.lineWidth = 6;
+  if (pose === "fly") {
+    g.beginPath(); g.moveTo(-5, -16); g.lineTo(-11, -6); g.stroke();
+    g.beginPath(); g.moveTo( 5, -16); g.lineTo( 11, -6); g.stroke();
+  } else {
+    g.beginPath(); g.moveTo(-5, -16); g.lineTo(-6, -3); g.stroke();
+    g.beginPath(); g.moveTo( 5, -16); g.lineTo( 6, -3); g.stroke();
   }
+  // arms behind torso
+  g.strokeStyle = "#22304d"; g.lineWidth = 6;
+  if (pose === "throw") {
+    g.beginPath(); g.moveTo(-11, -38); g.lineTo(-15, -26); g.stroke();
+    g.beginPath(); g.moveTo( 11, -38); g.lineTo( 18, -52); g.stroke();
+  } else if (pose === "fly") {
+    const fl = Math.sin(frame * 0.4) * 4;
+    g.beginPath(); g.moveTo(-11, -38); g.lineTo(-18, -48 - fl); g.stroke();
+    g.beginPath(); g.moveTo( 11, -38); g.lineTo( 18, -48 + fl); g.stroke();
+  } else {
+    g.beginPath(); g.moveTo(-11, -38); g.lineTo(-15, -24); g.stroke();
+    g.beginPath(); g.moveTo( 11, -38); g.lineTo( 15, -24); g.stroke();
+  }
+  // torso — navy suit
+  g.fillStyle = "#22304d";
+  g.beginPath(); g.roundRect(-13, -43, 26, 28, 5); g.fill();
+  // white shirt V
+  g.fillStyle = "#f7f5ef";
+  g.beginPath(); g.moveTo(-5, -43); g.lineTo(5, -43); g.lineTo(0, -28); g.closePath(); g.fill();
+  // the very long red tie
+  g.fillStyle = "#c42d2d";
+  g.beginPath(); g.moveTo(-2.2, -41); g.lineTo(2.2, -41);
+  g.lineTo(3.4, -23); g.lineTo(0, -17); g.lineTo(-3.4, -23); g.closePath(); g.fill();
+  // hands
+  g.fillStyle = "#efb183";
+  if (pose === "throw") {
+    g.beginPath(); g.arc(19, -53, 3, 0, 7); g.fill();
+    // teacup in hand, ready to lob
+    g.fillStyle = "#f4f1ea"; g.beginPath(); g.arc(22, -58, 6, 0, 7); g.fill();
+    g.fillStyle = "#a5691e"; g.beginPath(); g.arc(22, -58, 3.2, 0, 7); g.fill();
+  } else if (pose === "fly") {
+    const fl = Math.sin(frame * 0.4) * 4;
+    g.beginPath(); g.arc(-19, -49 - fl, 3, 0, 7); g.fill();
+    g.beginPath(); g.arc( 19, -49 + fl, 3, 0, 7); g.fill();
+  } else {
+    g.beginPath(); g.arc(-16, -23, 3, 0, 7); g.fill();
+    g.beginPath(); g.arc( 16, -23, 3, 0, 7); g.fill();
+  }
+  // head
+  g.fillStyle = "#efb183";
+  g.beginPath(); g.arc(0, -53, 10, 0, 7); g.fill();
+  // pursed mouth
+  g.fillStyle = "#b3745a";
+  g.beginPath(); g.ellipse(2, -47.5, 2.6, 1.6, 0, 0, 7); g.fill();
+  // squinty eyes + fair brows
+  g.fillStyle = "#3a5a8a";
+  g.beginPath(); g.arc(-3.6, -54, 1.3, 0, 7); g.fill();
+  g.beginPath(); g.arc( 4.4, -54, 1.3, 0, 7); g.fill();
+  g.strokeStyle = "#e8c86a"; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(-6, -57); g.lineTo(-1.6, -56.5); g.stroke();
+  g.beginPath(); g.moveTo( 2.4, -56.5); g.lineTo( 6.8, -57); g.stroke();
+  // the blonde swoop
+  g.fillStyle = "#f5d76e";
+  g.beginPath();
+  g.moveTo(-11, -54);
+  g.quadraticCurveTo(-14, -64, -3, -65.5);
+  g.quadraticCurveTo(8, -67, 13, -60);
+  g.quadraticCurveTo(15.5, -55.5, 12, -52.5);
+  g.quadraticCurveTo(13, -57, 8, -59);
+  g.quadraticCurveTo(1, -61.5, -6, -59);
+  g.quadraticCurveTo(-10, -57.5, -11, -54);
+  g.closePath(); g.fill();
+  g.beginPath();                                    // front flip of the swoop
+  g.moveTo(6, -60);
+  g.quadraticCurveTo(13, -60.5, 14, -55);
+  g.quadraticCurveTo(11, -58, 5, -57.5);
+  g.closePath(); g.fill();
   g.restore();
 }
 
@@ -612,51 +577,39 @@ function drawDizzy(x, y) {
   }
 }
 
-function drawSleepScene() {
-  // sloth tucked into bed
-  g.fillStyle = "#8f7ddb";
-  g.beginPath(); g.roundRect(408, 128, 128, 26, 8); g.fill();           // blanket pulled up
-  g.fillStyle = "#94816f";
-  g.beginPath(); g.arc(392, 128, 10, 0, 7); g.fill();                    // head on pillow
-  g.fillStyle = "#dcc9a8";
-  g.beginPath(); g.ellipse(395, 128, 6.6, 7, 0, 0, 7); g.fill();
-  g.strokeStyle = "#5a4632"; g.lineWidth = 3;
-  g.beginPath(); g.moveTo(393, 125); g.lineTo(399, 129); g.stroke();
-  g.strokeStyle = "#42332a"; g.lineWidth = 1.6;                          // closed eye
-  g.beginPath(); g.arc(397, 128, 2.4, Math.PI * 0.15, Math.PI * 0.85); g.stroke();
-  g.fillStyle = "#42332a";
-  g.beginPath(); g.ellipse(401, 130, 1.6, 1.2, 0, 0, 7); g.fill();
-  // silver hair spilling over the pillow edge
-  const sway = Math.sin(frame * 0.05) * 1.5;
-  for (let i = 0; i < 6; i++) {
-    g.strokeStyle = i % 2 ? "#e9e9f2" : "#cfd0dd"; g.lineWidth = 3;
-    g.beginPath();
-    g.moveTo(388 - i, 121 + i * 1.5);
-    g.quadraticCurveTo(372 - i * 2 + sway, 130, 366 - i * 2 + sway, 146 + (i % 3) * 3);
-    g.stroke();
+function drawTossScene() {
+  const p = player;
+  if (tossT <= 45) {
+    // hoisted overhead
+    drawHeroine(p.x, p.y, 1, "lift", 0);
+    drawPrez(p.x + 2, p.y - 46, "fly", Math.sin(frame * 0.2) * 0.12);
+    g.fillStyle = "#fff"; g.font = "bold 15px 'Courier New', monospace";
+    g.fillText("HEY!!", p.x + 24, p.y - 96);
+  } else {
+    drawHeroine(p.x, p.y, 1, tossT < 75 ? "lift" : "stand", 0);
+    if (flung.x < W + 80 && flung.y < H + 80) {
+      drawPrez(flung.x, flung.y, "fly", flung.rot);
+      g.fillStyle = "#fff"; g.font = "bold 16px 'Courier New', monospace";
+      g.fillText("AAAAA!", flung.x - 20, flung.y - 70);
+    }
   }
-  drawGuy(520, 129, "cheer");
-  for (const z of zzz) {
-    const a = Math.max(0, 1 - z.t / 120);
-    g.fillStyle = "rgba(255,255,255," + a.toFixed(2) + ")";
-    g.font = "bold " + (14 + z.t * 0.12) + "px 'Courier New', monospace";
-    g.fillText("Z", z.x + Math.sin(z.t * 0.1) * 8, z.y - z.t * 0.6);
+  if (tossT > 80) {
+    g.fillStyle = "rgba(10,12,40," + Math.min(0.4, (tossT - 80) / 250).toFixed(2) + ")";
+    g.fillRect(0, 0, W, H);
+    g.fillStyle = "#ffe9b0"; g.textAlign = "center";
+    g.font = "bold 30px 'Courier New', monospace";
+    g.fillText("Round " + round + " — overboard he goes!", W / 2, 330);
+    g.font = "bold 18px 'Courier New', monospace";
+    g.fillText("+" + (1000 + lives * 250) + " points", W / 2, 362);
+    g.textAlign = "left";
   }
-  g.fillStyle = "rgba(10,12,40," + Math.min(0.45, sleepT / 300).toFixed(2) + ")";
-  g.fillRect(0, 0, W, H);
-  g.fillStyle = "#ffe9b0"; g.textAlign = "center";
-  g.font = "bold 30px 'Courier New', monospace";
-  g.fillText("Night " + night + " — sweet dreams!", W / 2, 330);
-  g.font = "bold 18px 'Courier New', monospace";
-  g.fillText("+" + (1000 + lives * 250) + " points", W / 2, 362);
-  g.textAlign = "left";
 }
 
 function drawHUD() {
   g.fillStyle = "rgba(0,0,0,0.35)"; g.fillRect(0, 0, W, 34);
   g.fillStyle = "#ffe9b0"; g.font = "bold 17px 'Courier New', monospace";
   g.fillText("SCORE " + String(score).padStart(6, "0"), 14, 23);
-  g.textAlign = "center"; g.fillText("NIGHT " + night, W / 2, 23); g.textAlign = "left";
+  g.textAlign = "center"; g.fillText("ROUND " + round, W / 2, 23); g.textAlign = "left";
   g.fillStyle = "#ff8a9a";
   for (let i = 0; i < lives; i++) g.fillText("♥", W - 30 - i * 24, 24);
   if (muted) { g.fillStyle = "#8890b8"; g.fillText("MUTE", W - 130, 24); }
@@ -666,20 +619,16 @@ function drawTitle() {
   drawBackground();
   g.textAlign = "center";
   g.fillStyle = "#e9e9f2"; g.font = "bold 52px 'Courier New', monospace";
-  g.fillText("COURTNAY THE SLOTH", W / 2, 170);
+  g.fillText("TEA TIME TAKEDOWN", W / 2, 170);
   g.fillStyle = "#9aa0d0"; g.font = "bold 22px 'Courier New', monospace";
-  g.fillText("a bedtime climb", W / 2, 206);
-  drawSloth(W / 2 - 130, 400, 1, "stand", 0);
-  // mini bed
-  g.save(); g.translate(W / 2 + 60, 360);
-  g.fillStyle = "#7a4a2e"; g.fillRect(-6, 0, 10, 34);
-  g.fillStyle = "#f2ead8"; g.beginPath(); g.roundRect(0, 22, 130, 13, 5); g.fill();
-  g.fillStyle = "#8f7ddb"; g.beginPath(); g.roundRect(40, 19, 90, 15, 5); g.fill();
-  g.fillStyle = "#fff";    g.beginPath(); g.roundRect(6, 12, 34, 13, 6); g.fill();
-  g.restore();
+  g.fillText("a transatlantic climb", W / 2, 206);
+  drawHeroine(W / 2 - 150, 400, 1, "stand", 0);
+  drawPrez(W / 2 + 120, 402, "throw", 0);
+  // a cup mid-flight between them
+  drawCup({ x: W / 2 - 10, y: 330, r: 15, ang: frame * 0.1, falling: true });
   g.fillStyle = "#cfd2e8"; g.font = "bold 17px 'Courier New', monospace";
-  g.fillText("Courtnay hasn't slept in days. The bed is at the top.", W / 2, 470);
-  g.fillText("The WAKE CO. machine hurls alarm clocks to stop her.", W / 2, 496);
+  g.fillText("The Prez is up top, lobbing giant cups of tea.", W / 2, 470);
+  g.fillText("Climb the tower, dodge the china — and toss him overboard.", W / 2, 496);
   g.fillStyle = "#ffe9b0";
   g.fillText("← → move    ↑ ↓ ladders    SPACE jump", W / 2, 560);
   g.fillText("P pause    M mute", W / 2, 586);
@@ -692,9 +641,9 @@ function drawGameOver() {
   g.fillStyle = "rgba(5,6,20,0.75)"; g.fillRect(0, 0, W, H);
   g.textAlign = "center";
   g.fillStyle = "#ff8a9a"; g.font = "bold 44px 'Courier New', monospace";
-  g.fillText("TOO TIRED TO GO ON...", W / 2, 300);
+  g.fillText("SOAKED IN TEA...", W / 2, 300);
   g.fillStyle = "#e9e9f2"; g.font = "bold 24px 'Courier New', monospace";
-  g.fillText("SCORE " + score + "   ·   NIGHT " + night, W / 2, 350);
+  g.fillText("SCORE " + score + "   ·   ROUND " + round, W / 2, 350);
   const blink = (frame % 70) < 45;
   if (blink) g.fillText("PRESS ENTER", W / 2, 420);
   g.textAlign = "left";
@@ -705,12 +654,13 @@ function draw() {
   drawBackground();
   drawLadders();
   drawPlatforms();
-  drawMachine();
-  drawBed();
-  if (state !== "sleep") drawGuy(495, 136, "idle");
-  for (const c of clocks) drawClock(c);
-  if (state === "sleep") {
-    drawSleepScene();
+  if (state !== "toss") {
+    const windup = spawnT < 24;
+    drawPrez(PREZ_X, 168, windup ? "throw" : "idle", 0);
+  }
+  for (const c of cups) drawCup(c);
+  if (state === "toss") {
+    drawTossScene();
   } else {
     const p = player;
     const flash = invT > 0 && (invT % 8) < 4;
@@ -720,7 +670,7 @@ function draw() {
       else if (!p.grounded) pose = "jump";
       else if (left() || right()) pose = "walk";
       if (state === "dying") pose = "stand";
-      drawSloth(p.x, p.y, p.dir, pose, p.phase);
+      drawHeroine(p.x, p.y, p.dir, pose, p.phase);
       if (state === "dying") drawDizzy(p.x, p.y);
     }
   }

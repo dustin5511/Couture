@@ -1,12 +1,12 @@
 # Couture
 
-## 🦥 Courtnay the Sloth — A Bedtime Climb
+## 🫖 Tea Time Takedown — A Transatlantic Climb
 
-A single-page, Donkey Kong–style arcade platformer. You play Courtnay, a sloth
-with long silver hair who hasn't slept in days. Her cozy bed sits at the very top of the
-tower — but the **WAKE CO. Insomnia Machine** hurls rolling alarm clocks down
-the ramps to keep her awake. Climb the ladders, dodge (or jump over) the
-clocks, and tuck her in.
+A single-page, Donkey Kong–style arcade platformer. You play an Englishwoman
+in a St George's cross shirt. At the top of the tower stands **the Prez** — a
+blonde-swooped, red-tied head of state lobbing **giant cups of tea** down the
+ramps. Climb the ladders, dodge (or jump over) the rolling china, reach the
+top — and toss him overboard.
 
 ### Play
 
@@ -19,7 +19,7 @@ everything (art, physics, sound) is in one file.
 | --- | --- |
 | ← / → (or A / D) | Walk |
 | ↑ / ↓ (or W / S) | Climb ladders |
-| Space | Jump (jump over a clock for +50) |
+| Space | Jump (clear a teacup for +50) |
 | P | Pause |
 | M | Mute |
 
@@ -27,7 +27,8 @@ On touch devices, on-screen buttons appear automatically.
 
 ### Rules
 
-- Reach the bed at the top to finish the night (+1000, plus a bonus per life left).
-- Each new night the alarm clocks roll faster and spawn more often.
+- Reach the Prez at the top to finish the round (+1000, plus a bonus per life left)
+  and watch him get launched.
+- Each new round he lobs cups faster and more often.
 - Climbing to a new level earns +150.
-- Get hit by a clock and you lose a life — three hits and she's too tired to go on.
+- Get hit by a cup and you lose a life — three hits and you're soaked in tea.
